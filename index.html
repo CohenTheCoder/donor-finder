@@ -1,0 +1,1152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Lapsed Donor Finder</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,400&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --bg: #F5EFE6;
+    --bg-soft: #EDE5D8;
+    --paper: #FBF7F0;
+    --ink: #1F1A14;
+    --ink-soft: #4A4035;
+    --ink-muted: #8A7E6E;
+    --line: #D9CFBE;
+    --line-soft: #E5DDCC;
+    --accent: #2F5D3E;
+    --accent-deep: #1F4029;
+    --accent-soft: #DDE8DC;
+    --warm: #B85C2C;
+    --warm-soft: #F2DDCB;
+    --danger: #8B2E2E;
+    --shadow: 0 1px 2px rgba(31, 26, 20, 0.04), 0 8px 24px rgba(31, 26, 20, 0.06);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+  }
+
+  body {
+    background-image:
+      radial-gradient(circle at 20% 10%, rgba(47, 93, 62, 0.04) 0%, transparent 40%),
+      radial-gradient(circle at 80% 80%, rgba(184, 92, 44, 0.04) 0%, transparent 40%);
+    background-attachment: fixed;
+  }
+
+  .container {
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 40px 24px 80px;
+  }
+
+  /* Header */
+  header {
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 28px;
+    margin-bottom: 40px;
+  }
+  .eyebrow {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    color: var(--accent);
+    margin-bottom: 12px;
+  }
+  h1 {
+    font-family: 'Fraunces', serif;
+    font-weight: 500;
+    font-size: clamp(36px, 5vw, 56px);
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+    margin-bottom: 14px;
+  }
+  h1 em {
+    font-style: italic;
+    font-weight: 400;
+    color: var(--accent);
+  }
+  .subtitle {
+    color: var(--ink-soft);
+    font-size: 17px;
+    max-width: 580px;
+  }
+  .privacy-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 18px;
+    padding: 6px 12px;
+    background: var(--accent-soft);
+    border: 1px solid rgba(47, 93, 62, 0.2);
+    border-radius: 100px;
+    font-size: 12px;
+    color: var(--accent-deep);
+    font-weight: 500;
+  }
+  .privacy-badge::before {
+    content: "●";
+    color: var(--accent);
+  }
+
+  /* Stepper */
+  .stepper {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 36px;
+    align-items: center;
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+  .step-pill {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    border-radius: 100px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--ink-muted);
+    background: transparent;
+    transition: all 0.3s ease;
+    white-space: nowrap;
+  }
+  .step-pill .num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-soft);
+    color: var(--ink-muted);
+  }
+  .step-pill.active {
+    background: var(--ink);
+    color: var(--paper);
+  }
+  .step-pill.active .num {
+    background: var(--accent);
+    color: var(--paper);
+  }
+  .step-pill.done {
+    color: var(--accent);
+  }
+  .step-pill.done .num {
+    background: var(--accent);
+    color: var(--paper);
+  }
+  .step-pill.done .num::after {
+    content: "✓";
+  }
+  .step-pill.done .num span { display: none; }
+  .step-divider {
+    flex: 0 0 12px;
+    height: 1px;
+    background: var(--line);
+  }
+
+  /* Card */
+  .card {
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 36px;
+    box-shadow: var(--shadow);
+  }
+  .card + .card { margin-top: 20px; }
+
+  .card-title {
+    font-family: 'Fraunces', serif;
+    font-weight: 500;
+    font-size: 28px;
+    letter-spacing: -0.01em;
+    margin-bottom: 8px;
+  }
+  .card-desc {
+    color: var(--ink-soft);
+    margin-bottom: 28px;
+    font-size: 15px;
+  }
+
+  /* Drop zones */
+  .drop-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  @media (max-width: 640px) {
+    .drop-grid { grid-template-columns: 1fr; }
+    .card { padding: 24px; }
+  }
+
+  .drop-zone {
+    position: relative;
+    border: 2px dashed var(--line);
+    border-radius: 12px;
+    padding: 28px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    background: var(--bg-soft);
+    min-height: 180px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 10px;
+  }
+  .drop-zone:hover {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+  }
+  .drop-zone.has-file {
+    border-style: solid;
+    border-color: var(--accent);
+    background: var(--accent-soft);
+  }
+  .drop-zone.dragging {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    transform: scale(1.01);
+  }
+  .drop-zone input[type="file"] { display: none; }
+  .drop-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: var(--ink-muted);
+  }
+  .drop-zone.has-file .drop-label { color: var(--accent); }
+  .drop-title {
+    font-family: 'Fraunces', serif;
+    font-size: 20px;
+    font-weight: 500;
+  }
+  .drop-hint {
+    font-size: 13px;
+    color: var(--ink-muted);
+  }
+  .file-info {
+    display: none;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .drop-zone.has-file .file-info { display: flex; }
+  .drop-zone.has-file .drop-title-default,
+  .drop-zone.has-file .drop-hint-default { display: none; }
+  .file-name {
+    font-weight: 600;
+    font-size: 14px;
+    word-break: break-all;
+  }
+  .file-stats {
+    font-size: 12px;
+    color: var(--ink-soft);
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .file-clear {
+    background: none;
+    border: 1px solid var(--line);
+    color: var(--ink-soft);
+    padding: 4px 10px;
+    border-radius: 100px;
+    font-size: 11px;
+    cursor: pointer;
+    margin-top: 8px;
+    align-self: center;
+  }
+  .file-clear:hover { color: var(--danger); border-color: var(--danger); }
+
+  /* Buttons */
+  .btn {
+    font-family: 'Inter', sans-serif;
+    font-weight: 500;
+    font-size: 15px;
+    padding: 14px 28px;
+    border-radius: 100px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .btn-primary {
+    background: var(--ink);
+    color: var(--paper);
+  }
+  .btn-primary:hover:not(:disabled) {
+    background: var(--accent-deep);
+  }
+  .btn-primary:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+  .btn-ghost {
+    background: transparent;
+    color: var(--ink);
+    border-color: var(--line);
+  }
+  .btn-ghost:hover { background: var(--bg-soft); }
+  .btn-arrow::after {
+    content: "→";
+    font-size: 18px;
+    transition: transform 0.2s ease;
+  }
+  .btn-arrow:hover:not(:disabled)::after { transform: translateX(3px); }
+  .actions {
+    margin-top: 28px;
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+  }
+
+  /* Mapping */
+  .mapping-grid {
+    display: grid;
+    gap: 12px;
+  }
+  .map-row {
+    display: grid;
+    grid-template-columns: 200px 1fr auto;
+    gap: 12px;
+    align-items: center;
+    padding: 14px 16px;
+    background: var(--bg-soft);
+    border-radius: 10px;
+    border: 1px solid var(--line-soft);
+  }
+  @media (max-width: 640px) {
+    .map-row {
+      grid-template-columns: 1fr;
+      gap: 6px;
+    }
+  }
+  .map-label {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .map-label-name {
+    font-weight: 600;
+    font-size: 14px;
+  }
+  .map-label-hint {
+    font-size: 12px;
+    color: var(--ink-muted);
+  }
+  .map-row select, .map-row input[type="text"] {
+    font-family: 'Inter', sans-serif;
+    font-size: 14px;
+    padding: 9px 12px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--paper);
+    color: var(--ink);
+    width: 100%;
+  }
+  .map-row select:focus, .map-row input[type="text"]:focus {
+    outline: 2px solid var(--accent);
+    outline-offset: -1px;
+    border-color: var(--accent);
+  }
+  .auto-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    padding: 3px 8px;
+    border-radius: 100px;
+    white-space: nowrap;
+  }
+  .auto-tag.detected {
+    background: var(--accent-soft);
+    color: var(--accent-deep);
+  }
+  .auto-tag.missing {
+    background: var(--warm-soft);
+    color: var(--warm);
+  }
+  .auto-tag.optional {
+    background: var(--bg-soft);
+    color: var(--ink-muted);
+  }
+
+  .info-box {
+    background: var(--warm-soft);
+    border-left: 3px solid var(--warm);
+    padding: 14px 18px;
+    border-radius: 8px;
+    font-size: 14px;
+    margin-top: 20px;
+    color: var(--ink-soft);
+  }
+  .info-box strong { color: var(--ink); }
+
+  /* Results */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 14px;
+    margin-bottom: 28px;
+  }
+  .stat {
+    padding: 22px 20px;
+    background: var(--bg-soft);
+    border: 1px solid var(--line-soft);
+    border-radius: 12px;
+  }
+  .stat.highlight {
+    background: var(--accent-soft);
+    border-color: rgba(47, 93, 62, 0.2);
+  }
+  .stat-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: var(--ink-muted);
+    margin-bottom: 8px;
+  }
+  .stat.highlight .stat-label { color: var(--accent-deep); }
+  .stat-value {
+    font-family: 'Fraunces', serif;
+    font-size: 36px;
+    font-weight: 500;
+    line-height: 1;
+    letter-spacing: -0.02em;
+  }
+  .stat-sub {
+    font-size: 12px;
+    color: var(--ink-muted);
+    margin-top: 4px;
+  }
+
+  /* Table */
+  .table-wrap {
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    overflow: hidden;
+    margin-top: 20px;
+  }
+  .table-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 18px;
+    background: var(--bg-soft);
+    border-bottom: 1px solid var(--line);
+    font-size: 13px;
+    color: var(--ink-soft);
+  }
+  .table-scroll {
+    max-height: 420px;
+    overflow: auto;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  thead th {
+    position: sticky;
+    top: 0;
+    background: var(--paper);
+    text-align: left;
+    padding: 10px 14px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--ink-muted);
+    border-bottom: 1px solid var(--line);
+    font-weight: 500;
+  }
+  tbody td {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--line-soft);
+    vertical-align: top;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: var(--bg-soft); }
+  td.amount {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 500;
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  /* Errors */
+  .error-box {
+    background: #FBE9E9;
+    border-left: 3px solid var(--danger);
+    padding: 14px 18px;
+    border-radius: 8px;
+    color: var(--danger);
+    font-size: 14px;
+    margin-top: 16px;
+  }
+
+  /* Loader */
+  .loader {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .hidden { display: none !important; }
+
+  .footer {
+    text-align: center;
+    color: var(--ink-muted);
+    font-size: 13px;
+    margin-top: 60px;
+    padding-top: 28px;
+    border-top: 1px solid var(--line);
+  }
+  .footer em {
+    font-family: 'Fraunces', serif;
+    color: var(--ink-soft);
+  }
+
+  /* Subtle reveal */
+  .card, .stats-grid, .table-wrap {
+    animation: fadeUp 0.5s ease backwards;
+  }
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <div class="eyebrow">Lapsed Donor Finder · v1.0</div>
+    <h1>Find the donors who <em>didn't come back</em>.</h1>
+    <p class="subtitle">Upload last year's and this year's donor lists. We'll find everyone from last year who's missing this year — matching by name, email, phone, and even spouse names.</p>
+    <div class="privacy-badge">All processing happens in your browser. No data is uploaded anywhere.</div>
+  </header>
+
+  <!-- STEPPER -->
+  <div class="stepper">
+    <div class="step-pill active" data-step="1"><span class="num"><span>1</span></span> Upload files</div>
+    <div class="step-divider"></div>
+    <div class="step-pill" data-step="2"><span class="num"><span>2</span></span> Match columns</div>
+    <div class="step-divider"></div>
+    <div class="step-pill" data-step="3"><span class="num"><span>3</span></span> Review results</div>
+  </div>
+
+  <!-- STEP 1: UPLOAD -->
+  <section id="step-1" class="card">
+    <h2 class="card-title">Drop in your two files</h2>
+    <p class="card-desc">Excel (.xlsx, .xls) or CSV. The order matters — make sure last year goes on the left and this year on the right.</p>
+
+    <div class="drop-grid">
+      <label class="drop-zone" id="dropLast">
+        <input type="file" accept=".xlsx,.xls,.csv" data-target="last">
+        <div class="drop-label">Last year</div>
+        <div class="drop-title drop-title-default">Drop file here</div>
+        <div class="drop-hint drop-hint-default">or click to browse</div>
+        <div class="file-info">
+          <div class="file-name"></div>
+          <div class="file-stats"></div>
+          <button type="button" class="file-clear">Remove</button>
+        </div>
+      </label>
+
+      <label class="drop-zone" id="dropThis">
+        <input type="file" accept=".xlsx,.xls,.csv" data-target="this">
+        <div class="drop-label">This year</div>
+        <div class="drop-title drop-title-default">Drop file here</div>
+        <div class="drop-hint drop-hint-default">or click to browse</div>
+        <div class="file-info">
+          <div class="file-name"></div>
+          <div class="file-stats"></div>
+          <button type="button" class="file-clear">Remove</button>
+        </div>
+      </label>
+    </div>
+
+    <div id="uploadError" class="error-box hidden"></div>
+
+    <div class="actions">
+      <button id="goToStep2" class="btn btn-primary btn-arrow" disabled>Continue</button>
+    </div>
+  </section>
+
+  <!-- STEP 2: MAPPING -->
+  <section id="step-2" class="card hidden">
+    <h2 class="card-title">Confirm your columns</h2>
+    <p class="card-desc">We tried to auto-detect each field. Adjust any that look wrong. Required fields need a column; the optional one can stay blank.</p>
+
+    <div class="mapping-grid" id="mappingGrid"></div>
+
+    <div class="info-box">
+      <strong>Don't worry about formatting.</strong> Phone numbers, capitalization, extra spaces, and even spouse names like <em>"Dave &amp; Jane"</em> are all handled automatically.
+    </div>
+
+    <div id="mapError" class="error-box hidden"></div>
+
+    <div class="actions">
+      <button id="backToStep1" class="btn btn-ghost">← Back</button>
+      <button id="runAnalysis" class="btn btn-primary btn-arrow">Run analysis</button>
+    </div>
+  </section>
+
+  <!-- STEP 3: RESULTS -->
+  <section id="step-3" class="card hidden">
+    <h2 class="card-title">Lapsed donors</h2>
+    <p class="card-desc">These donors gave last year but couldn't be matched to anyone this year — by name, email, phone, or any spouse variant.</p>
+
+    <div class="stats-grid" id="statsGrid"></div>
+
+    <div class="table-wrap">
+      <div class="table-header">
+        <span id="tablePreviewLabel">Preview</span>
+        <span id="tableSortHint">Sorted by amount, highest first</span>
+      </div>
+      <div class="table-scroll">
+        <table id="resultsTable">
+          <thead></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button id="backToStep2" class="btn btn-ghost">← Adjust columns</button>
+      <button id="startOver" class="btn btn-ghost">Start over</button>
+      <button id="downloadCsv" class="btn btn-primary">⬇ Download CSV</button>
+    </div>
+  </section>
+
+  <div class="footer">
+    Built for fundraisers who <em>care</em>. Open-source, free forever.
+  </div>
+</div>
+
+<script>
+// ============================================================
+// STATE
+// ============================================================
+const state = {
+  lastFile: null,
+  thisFile: null,
+  lastData: null,    // array of row objects
+  thisData: null,
+  lastColumns: [],
+  thisColumns: [],
+  mapping: {
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
+    amount: '',
+    runner: ''       // optional
+  },
+  runnerLabel: 'RunnerName',
+  results: null
+};
+
+// ============================================================
+// COLUMN AUTO-DETECTION
+// ============================================================
+const FIELD_HINTS = {
+  firstName: ['firstname', 'first name', 'first', 'fname', 'given name', 'givenname'],
+  lastName: ['lastname', 'last name', 'last', 'lname', 'surname', 'family name', 'familyname'],
+  email: ['email', 'e-mail', 'emailaddress', 'email address', 'mail'],
+  phone: ['phone', 'phonenumber', 'phone number', 'telephone', 'tel', 'mobile', 'cell', 'cellphone'],
+  amount: ['amount', 'donation', 'donationamount', 'donation amount', 'gift', 'giftamount', 'gift amount', 'total', 'amount donated', 'value'],
+  runner: ['runnername', 'runner name', 'runner', 'captain', 'team', 'team name', 'teamname', 'fundraiser', 'in honor of', 'inhonorof']
+};
+
+function normalizeColName(s) {
+  return String(s || '').toLowerCase().replace(/[\s_\-\.]/g, '').trim();
+}
+
+function autoDetectColumn(columns, hints) {
+  const normalizedCols = columns.map(c => ({ orig: c, norm: normalizeColName(c) }));
+  // exact match first
+  for (const hint of hints) {
+    const h = normalizeColName(hint);
+    const found = normalizedCols.find(c => c.norm === h);
+    if (found) return found.orig;
+  }
+  // partial match
+  for (const hint of hints) {
+    const h = normalizeColName(hint);
+    const found = normalizedCols.find(c => c.norm.includes(h) || h.includes(c.norm));
+    if (found) return found.orig;
+  }
+  return '';
+}
+
+// ============================================================
+// CORE LOGIC (translated from Python)
+// ============================================================
+function cleanPhoneNumber(phone) {
+  if (phone == null) return '';
+  const s = String(phone).trim();
+  if (s === '' || s.toLowerCase() === 'nan') return '';
+  let digits = s.replace(/\D/g, '');
+  // Normalize US numbers: drop leading "1" country code if it gives an 11-digit number
+  // so "+1 555 123 4567" matches "(555) 123-4567"
+  if (digits.length === 11 && digits.startsWith('1')) {
+    digits = digits.substring(1);
+  }
+  return digits;
+}
+
+function cleanField(value) {
+  if (value == null) return '';
+  return String(value)
+    .trim()
+    .replace(/\s/g, '')
+    .replace(/\./g, '')
+    .replace(/-/g, '')
+    .toLowerCase();
+}
+
+function splitSpouseNames(firstName, lastName) {
+  const fn = String(firstName || '').trim();
+  const ln = String(lastName || '').trim();
+  let firstNames;
+  if (fn.includes('&')) {
+    firstNames = fn.split('&').map(n => n.trim()).filter(Boolean);
+  } else if (/ and /i.test(fn)) {
+    firstNames = fn.split(/ and /i).map(n => n.trim()).filter(Boolean);
+  } else {
+    firstNames = [fn];
+  }
+  return firstNames.map(n => [n, ln]);
+}
+
+function getAllNameVariants(firstName, lastName) {
+  const variants = new Set();
+  const combined = String(firstName || '') + String(lastName || '');
+  variants.add(cleanField(combined));
+  for (const [fn, ln] of splitSpouseNames(firstName, lastName)) {
+    variants.add(cleanField(fn + ln));
+  }
+  variants.delete(''); // drop empties
+  return variants;
+}
+
+function findCompletelyUnmatched(lastYearRows, thisYearRows, m) {
+  const thisYearEmails = new Set();
+  const thisYearPhones = new Set();
+  const thisYearNameVariants = new Set();
+
+  for (const row of thisYearRows) {
+    const email = cleanField(row[m.email]);
+    if (email) thisYearEmails.add(email);
+    const phone = cleanPhoneNumber(row[m.phone]);
+    if (phone) thisYearPhones.add(phone);
+    const variants = getAllNameVariants(row[m.firstName], row[m.lastName]);
+    variants.forEach(v => thisYearNameVariants.add(v));
+  }
+
+  const unmatched = [];
+  for (const row of lastYearRows) {
+    const emailClean = cleanField(row[m.email]);
+    const phoneClean = cleanPhoneNumber(row[m.phone]);
+    const nameVariants = getAllNameVariants(row[m.firstName], row[m.lastName]);
+
+    const emailMatch = emailClean && thisYearEmails.has(emailClean);
+    const phoneMatch = phoneClean && thisYearPhones.has(phoneClean);
+    const nameMatch = [...nameVariants].some(v => thisYearNameVariants.has(v));
+
+    if (!emailMatch && !phoneMatch && !nameMatch) {
+      unmatched.push(row);
+    }
+  }
+  return unmatched;
+}
+
+function parseAmount(v) {
+  if (v == null || v === '') return 0;
+  const s = String(v).replace(/[^0-9.\-]/g, '');
+  const n = parseFloat(s);
+  return isNaN(n) ? 0 : n;
+}
+
+// ============================================================
+// FILE PARSING
+// ============================================================
+function parseFile(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = new Uint8Array(e.target.result);
+        const wb = XLSX.read(data, { type: 'array' });
+        const firstSheet = wb.SheetNames[0];
+        const rows = XLSX.utils.sheet_to_json(wb.Sheets[firstSheet], { defval: '' });
+        if (!rows.length) return reject(new Error('That file looks empty.'));
+        const columns = Object.keys(rows[0]);
+        resolve({ rows, columns });
+      } catch (err) {
+        reject(new Error('Could not read that file. Make sure it\'s a valid .xlsx, .xls, or .csv.'));
+      }
+    };
+    reader.onerror = () => reject(new Error('Could not read the file.'));
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+// ============================================================
+// UI
+// ============================================================
+const $ = (id) => document.getElementById(id);
+const dropZones = document.querySelectorAll('.drop-zone');
+
+function showStep(n) {
+  ['step-1', 'step-2', 'step-3'].forEach((id, i) => {
+    $(id).classList.toggle('hidden', (i + 1) !== n);
+  });
+  document.querySelectorAll('.step-pill').forEach(p => {
+    const s = parseInt(p.dataset.step);
+    p.classList.remove('active', 'done');
+    if (s === n) p.classList.add('active');
+    else if (s < n) p.classList.add('done');
+  });
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function showError(elId, msg) {
+  const el = $(elId);
+  el.textContent = msg;
+  el.classList.remove('hidden');
+}
+function hideError(elId) { $(elId).classList.add('hidden'); }
+
+// Drag/drop & click upload
+dropZones.forEach(zone => {
+  const input = zone.querySelector('input[type="file"]');
+  const target = input.dataset.target; // 'last' or 'this'
+
+  zone.addEventListener('dragover', (e) => { e.preventDefault(); zone.classList.add('dragging'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('dragging'));
+  zone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    zone.classList.remove('dragging');
+    const file = e.dataTransfer.files[0];
+    if (file) handleFile(file, target, zone);
+  });
+  input.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (file) handleFile(file, target, zone);
+  });
+
+  // clear button
+  zone.querySelector('.file-clear').addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (target === 'last') { state.lastFile = null; state.lastData = null; state.lastColumns = []; }
+    else { state.thisFile = null; state.thisData = null; state.thisColumns = []; }
+    zone.classList.remove('has-file');
+    input.value = '';
+    updateContinueButton();
+  });
+});
+
+async function handleFile(file, target, zone) {
+  hideError('uploadError');
+  try {
+    const { rows, columns } = await parseFile(file);
+    if (target === 'last') {
+      state.lastFile = file;
+      state.lastData = rows;
+      state.lastColumns = columns;
+    } else {
+      state.thisFile = file;
+      state.thisData = rows;
+      state.thisColumns = columns;
+    }
+    zone.classList.add('has-file');
+    zone.querySelector('.file-name').textContent = file.name;
+    zone.querySelector('.file-stats').textContent =
+      `${rows.length.toLocaleString()} rows · ${columns.length} columns`;
+    updateContinueButton();
+  } catch (err) {
+    showError('uploadError', err.message);
+  }
+}
+
+function updateContinueButton() {
+  $('goToStep2').disabled = !(state.lastFile && state.thisFile);
+}
+
+// ============================================================
+// STEP 2: MAPPING
+// ============================================================
+$('goToStep2').addEventListener('click', () => {
+  // Build column union (prefer columns that exist in BOTH files)
+  const allCols = Array.from(new Set([...state.lastColumns, ...state.thisColumns]));
+
+  // auto-detect
+  state.mapping.firstName = autoDetectColumn(allCols, FIELD_HINTS.firstName);
+  state.mapping.lastName = autoDetectColumn(allCols, FIELD_HINTS.lastName);
+  state.mapping.email = autoDetectColumn(allCols, FIELD_HINTS.email);
+  state.mapping.phone = autoDetectColumn(allCols, FIELD_HINTS.phone);
+  state.mapping.amount = autoDetectColumn(allCols, FIELD_HINTS.amount);
+  state.mapping.runner = autoDetectColumn(allCols, FIELD_HINTS.runner);
+
+  renderMappingUI(allCols);
+  showStep(2);
+});
+
+function renderMappingUI(allCols) {
+  const fields = [
+    { key: 'firstName', label: 'First Name', hint: 'e.g. "John" or "Dave & Jane"', required: true },
+    { key: 'lastName', label: 'Last Name', hint: 'e.g. "Smith"', required: true },
+    { key: 'email', label: 'Email', hint: 'Used to match across years', required: true },
+    { key: 'phone', label: 'Phone', hint: 'Any format works', required: true },
+    { key: 'amount', label: 'Donation Amount', hint: 'Numbers — currency symbols are fine', required: true },
+    { key: 'runner', label: 'Runner / Team (optional)', hint: 'Optional — name this whatever you like', required: false }
+  ];
+
+  const grid = $('mappingGrid');
+  grid.innerHTML = '';
+
+  fields.forEach(f => {
+    const detected = state.mapping[f.key];
+    let tagHTML;
+    if (f.required) {
+      tagHTML = detected
+        ? '<span class="auto-tag detected">auto-detected</span>'
+        : '<span class="auto-tag missing">needs selection</span>';
+    } else {
+      tagHTML = detected
+        ? '<span class="auto-tag detected">auto-detected</span>'
+        : '<span class="auto-tag optional">optional</span>';
+    }
+
+    let labelExtra = '';
+    if (f.key === 'runner') {
+      // allow custom label
+      labelExtra = `
+        <input type="text" class="runner-label-input" placeholder="Field label (default: RunnerName)"
+               value="${state.runnerLabel}" style="margin-top:6px; font-size:12px; padding:6px 10px;">
+      `;
+    }
+
+    const row = document.createElement('div');
+    row.className = 'map-row';
+    row.innerHTML = `
+      <div class="map-label">
+        <div class="map-label-name">${f.label}</div>
+        <div class="map-label-hint">${f.hint}</div>
+        ${labelExtra}
+      </div>
+      <select data-field="${f.key}">
+        <option value="">${f.required ? '— select column —' : '— none —'}</option>
+        ${allCols.map(c => `<option value="${c}" ${c === detected ? 'selected' : ''}>${c}</option>`).join('')}
+      </select>
+      ${tagHTML}
+    `;
+    grid.appendChild(row);
+  });
+
+  // wire up
+  grid.querySelectorAll('select').forEach(sel => {
+    sel.addEventListener('change', (e) => {
+      state.mapping[e.target.dataset.field] = e.target.value;
+    });
+  });
+  const labelInput = grid.querySelector('.runner-label-input');
+  if (labelInput) {
+    labelInput.addEventListener('input', (e) => {
+      state.runnerLabel = e.target.value.trim() || 'RunnerName';
+    });
+  }
+}
+
+$('backToStep1').addEventListener('click', () => showStep(1));
+$('backToStep2').addEventListener('click', () => showStep(2));
+
+// ============================================================
+// STEP 3: RUN ANALYSIS
+// ============================================================
+$('runAnalysis').addEventListener('click', () => {
+  hideError('mapError');
+  const m = state.mapping;
+  const required = ['firstName', 'lastName', 'email', 'phone', 'amount'];
+  const missing = required.filter(k => !m[k]);
+  if (missing.length) {
+    const names = { firstName: 'First Name', lastName: 'Last Name', email: 'Email', phone: 'Phone', amount: 'Amount' };
+    showError('mapError', `Please pick a column for: ${missing.map(k => names[k]).join(', ')}`);
+    return;
+  }
+  // Validate each column exists in both files
+  const checkCol = (col) => state.lastColumns.includes(col) && state.thisColumns.includes(col);
+  for (const k of required) {
+    if (!checkCol(m[k])) {
+      showError('mapError', `Column "${m[k]}" doesn't exist in both files. Make sure both files have this column.`);
+      return;
+    }
+  }
+
+  try {
+    const unmatched = findCompletelyUnmatched(state.lastData, state.thisData, m);
+
+    // Build report rows
+    const reportRows = unmatched.map(r => {
+      const fn = String(r[m.firstName] || '').trim();
+      const ln = String(r[m.lastName] || '').trim();
+      const row = {
+        Name: `${fn} ${ln}`.trim(),
+        Email: r[m.email] || '',
+        Phone: r[m.phone] || '',
+        Amount: parseAmount(r[m.amount])
+      };
+      if (m.runner) row[state.runnerLabel] = r[m.runner] || '';
+      return row;
+    });
+    reportRows.sort((a, b) => b.Amount - a.Amount);
+
+    // Stats
+    const totalAmount = reportRows.reduce((s, r) => s + r.Amount, 0);
+    const lastYearTotal = state.lastData.reduce((s, r) => s + parseAmount(r[m.amount]), 0);
+
+    state.results = {
+      rows: reportRows,
+      stats: {
+        lapsedCount: reportRows.length,
+        lastYearCount: state.lastData.length,
+        thisYearCount: state.thisData.length,
+        lostAmount: totalAmount,
+        lastYearTotal: lastYearTotal,
+        lostPct: lastYearTotal > 0 ? (totalAmount / lastYearTotal * 100) : 0
+      }
+    };
+
+    renderResults();
+    showStep(3);
+  } catch (err) {
+    showError('mapError', `Something went wrong: ${err.message}`);
+  }
+});
+
+function renderResults() {
+  const { rows, stats } = state.results;
+  const fmtMoney = (n) => '$' + Math.round(n).toLocaleString();
+  const fmtNum = (n) => n.toLocaleString();
+
+  $('statsGrid').innerHTML = `
+    <div class="stat highlight">
+      <div class="stat-label">Lapsed donors</div>
+      <div class="stat-value">${fmtNum(stats.lapsedCount)}</div>
+      <div class="stat-sub">of ${fmtNum(stats.lastYearCount)} last year</div>
+    </div>
+    <div class="stat highlight">
+      <div class="stat-label">Revenue at risk</div>
+      <div class="stat-value">${fmtMoney(stats.lostAmount)}</div>
+      <div class="stat-sub">${stats.lostPct.toFixed(1)}% of last year</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Last year total</div>
+      <div class="stat-value">${fmtNum(stats.lastYearCount)}</div>
+      <div class="stat-sub">${fmtMoney(stats.lastYearTotal)} raised</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">This year so far</div>
+      <div class="stat-value">${fmtNum(stats.thisYearCount)}</div>
+      <div class="stat-sub">donors recorded</div>
+    </div>
+  `;
+
+  // Table
+  const cols = Object.keys(rows[0] || { Name: '', Email: '', Phone: '', Amount: 0 });
+  const thead = $('resultsTable').querySelector('thead');
+  const tbody = $('resultsTable').querySelector('tbody');
+  thead.innerHTML = '<tr>' + cols.map(c => `<th${c === 'Amount' ? ' style="text-align:right"' : ''}>${c}</th>`).join('') + '</tr>';
+
+  const previewRows = rows.slice(0, 50);
+  tbody.innerHTML = previewRows.map(r => {
+    return '<tr>' + cols.map(c => {
+      if (c === 'Amount') return `<td class="amount">${'$' + Math.round(r[c]).toLocaleString()}</td>`;
+      return `<td>${escapeHtml(r[c] == null ? '' : String(r[c]))}</td>`;
+    }).join('') + '</tr>';
+  }).join('');
+
+  $('tablePreviewLabel').textContent = rows.length > 50
+    ? `Showing first 50 of ${rows.length.toLocaleString()} — full list in CSV download`
+    : `Showing all ${rows.length.toLocaleString()}`;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// ============================================================
+// CSV DOWNLOAD
+// ============================================================
+$('downloadCsv').addEventListener('click', () => {
+  if (!state.results) return;
+  const rows = state.results.rows;
+  if (!rows.length) { alert('No lapsed donors found — nothing to download!'); return; }
+
+  const cols = Object.keys(rows[0]);
+  const csvRows = [cols.join(',')];
+  for (const r of rows) {
+    csvRows.push(cols.map(c => csvCell(r[c])).join(','));
+  }
+  const blob = new Blob([csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const today = new Date().toISOString().slice(0, 10);
+  a.href = url;
+  a.download = `lapsed_donors_${today}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
+function csvCell(v) {
+  if (v == null) return '';
+  const s = String(v);
+  if (/[",\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+  return s;
+}
+
+// Start over
+$('startOver').addEventListener('click', () => {
+  if (!confirm('Start over? Your current data will be cleared.')) return;
+  state.lastFile = state.thisFile = null;
+  state.lastData = state.thisData = null;
+  state.lastColumns = state.thisColumns = [];
+  state.results = null;
+  document.querySelectorAll('.drop-zone').forEach(z => {
+    z.classList.remove('has-file');
+    z.querySelector('input').value = '';
+  });
+  updateContinueButton();
+  showStep(1);
+});
+</script>
+</body>
+</html>
