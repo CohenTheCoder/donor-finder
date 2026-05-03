@@ -902,7 +902,8 @@ const state = {
   },
   built: false,
   charts: {},
-  maps: { choro: null, markers: null }
+  maps: { choro: null, markers: null },
+  zipDb: null, zipDbPromise: null
 };
 
 // ============================================================
@@ -1408,28 +1409,28 @@ function buildOverview() {
   buildHistogram(amounts);
 }
 
+// Standard donation-size buckets used everywhere amounts are histogrammed
+function bucketAmounts(amounts) {
+  const labels = ['$0–250', '$251–500', '$501–999', '$1k–2k', '$2k–5k', '$5k–10k', '$10k+'];
+  const counts = new Array(labels.length).fill(0);
+  for (const a of amounts) {
+    let idx;
+    if (a <= 250) idx = 0;
+    else if (a <= 500) idx = 1;
+    else if (a < 1000) idx = 2;
+    else if (a <= 2000) idx = 3;
+    else if (a <= 5000) idx = 4;
+    else if (a <= 10000) idx = 5;
+    else idx = 6;
+    counts[idx] += 1;
+  }
+  return { labels, counts };
+}
+
 function buildHistogram(amounts) {
   destroyChart('chartHisto');
   if (!amounts.length) return;
-  const max = Math.max(...amounts);
-  const min = Math.min(...amounts);
-  // Smart bin edges: prefer round numbers
-  const edges = niceBins(min, max, 6);
-  const counts = new Array(edges.length - 1).fill(0);
-  for (const a of amounts) {
-    let idx = edges.length - 2;
-    for (let i = 0; i < edges.length - 1; i++) {
-      if (a >= edges[i] && a < edges[i + 1]) { idx = i; break; }
-      if (i === edges.length - 2 && a >= edges[i]) idx = i;
-    }
-    counts[idx] += 1;
-  }
-  const labels = [];
-  for (let i = 0; i < edges.length - 1; i++) {
-    const lo = edges[i], hi = edges[i + 1];
-    if (i === edges.length - 2) labels.push(`${fmtMoneyShort(lo)}+`);
-    else labels.push(`${fmtMoneyShort(lo)}–${fmtMoneyShort(hi)}`);
-  }
+  const { labels, counts } = bucketAmounts(amounts);
   const ctx = document.getElementById('chartHisto').getContext('2d');
   state.charts.chartHisto = new Chart(ctx, {
     type: 'bar',
@@ -1573,6 +1574,7 @@ function buildLapsed() {
       Name: `${fn} ${ln}`.trim(),
       Email: r[m.email] || '',
       Phone: r[m.phone] || '',
+      Fundraiser: m.runner ? String(r[m.runner] || '').trim() : '',
       Amount: parseAmount(r[m.amount])
     };
   }).sort((a, b) => b.Amount - a.Amount);
@@ -1614,13 +1616,14 @@ function buildLapsed() {
         </div>
         <div class="table-scroll">
           <table class="dt">
-            <thead><tr><th>Name</th><th>Email</th><th>Phone</th><th class="num">Last year</th></tr></thead>
+            <thead><tr><th>Name</th><th>Email</th><th>Phone</th>${m.runner ? '<th>Fundraiser (last year)</th>' : ''}<th class="num">Last year</th></tr></thead>
             <tbody>
               ${lapsedRows.slice(0, 200).map(r => `
                 <tr>
                   <td>${escapeHtml(r.Name)}</td>
                   <td>${escapeHtml(r.Email)}</td>
                   <td>${escapeHtml(r.Phone)}</td>
+                  ${m.runner ? `<td>${escapeHtml(r.Fundraiser) || '<span style="color:var(--ink-muted)">—</span>'}</td>` : ''}
                   <td class="num">${fmtMoney(r.Amount)}</td>
                 </tr>
               `).join('')}
@@ -1677,7 +1680,8 @@ function buildLapsed() {
 
 function downloadLapsedCSV() {
   if (!state._lapsedRows || !state._lapsedRows.length) return;
-  const cols = ['Name', 'Email', 'Phone', 'Amount'];
+  const hasRunner = state._lapsedRows.some(r => r.Fundraiser);
+  const cols = hasRunner ? ['Name', 'Email', 'Phone', 'Fundraiser', 'Amount'] : ['Name', 'Email', 'Phone', 'Amount'];
   const csv = [cols.join(',')].concat(state._lapsedRows.map(r => cols.map(c => csvCell(r[c])).join(','))).join('\n');
   downloadCSV(csv, `lapsed_donors_${todayStr()}.csv`);
 }
@@ -1824,7 +1828,7 @@ function buildGeography() {
         <div class="card-header">
           <div>
             <div class="card-title">Choropleth — total raised by state</div>
-            <div class="card-sub">Darker = more raised</div>
+            <div class="card-sub">Log-scaled — visible even when one state dominates</div>
           </div>
         </div>
         <div id="choroplethMap"></div>
@@ -1834,7 +1838,7 @@ function buildGeography() {
         <div class="card-header">
           <div>
             <div class="card-title">Hot zones</div>
-            <div class="card-sub">Click any bubble for state details</div>
+            <div class="card-sub">Click any bubble for details</div>
           </div>
         </div>
         <div id="markerMap"></div>
@@ -1893,7 +1897,9 @@ function renderMaps(stateAgg, stateRows) {
 
   function colorFor(value) {
     if (!value) return 'rgba(217, 207, 190, 0.3)';
-    const t = Math.sqrt(value / maxTotal); // sqrt for better visual scale
+    // Log scale handles the common case where one state dominates the campaign —
+    // sqrt would still wash out everything except the top 1-2 states.
+    const t = Math.log(1 + value) / Math.log(1 + maxTotal);
     // gradient from cream → sage
     const r = Math.round(245 - (245 - 47) * t);
     const g = Math.round(239 - (239 - 93) * t);
@@ -1949,10 +1955,12 @@ function renderMaps(stateAgg, stateRows) {
       }
     }).addTo(choro);
 
-    // Legend
+    // Legend (log-scaled to match)
     const legendHtml = ['Less'];
-    for (let i = 0; i < 6; i++) {
-      const v = (i + 1) / 6 * maxTotal;
+    for (let i = 1; i <= 6; i++) {
+      // Map evenly across log range so swatches show actual gradient
+      const t = i / 6;
+      const v = Math.exp(t * Math.log(1 + maxTotal)) - 1;
       legendHtml.push(`<span class="legend-swatch" style="background: ${colorFor(v)}"></span>`);
     }
     legendHtml.push(`More (max ${fmtMoney(maxTotal)})`);
@@ -1961,7 +1969,7 @@ function renderMaps(stateAgg, stateRows) {
 
   tryFetchGeo();
 
-  // -------------- MARKER MAP --------------
+  // -------------- MARKER MAP (zip-level if available, state-level fallback) --------------
   const markersEl = document.getElementById('markerMap');
   if (!markersEl) return;
   const m2 = L.map('markerMap', { zoomControl: true, attributionControl: false }).setView([39.5, -98], 3.5);
@@ -1970,29 +1978,193 @@ function renderMaps(stateAgg, stateRows) {
     maxZoom: 18, subdomains: 'abcd'
   }).addTo(m2);
 
-  stateRows.forEach(r => {
-    const c = STATE_CENTROIDS[r.code];
-    if (!c) return;
-    const radius = 8 + Math.sqrt(r.total / maxTotal) * 32;
-    const circle = L.circleMarker(c, {
-      radius, fillColor: '#2F5D3E', color: '#1F4029',
-      weight: 1.5, opacity: 1, fillOpacity: 0.55
-    }).addTo(m2);
-    const cityList = r.topCities.length
-      ? r.topCities.map(ct => `<div class="pop-row"><span>${escapeHtml(ct.city)}</span><strong>${fmtMoney(ct.total)}</strong></div>`).join('')
-      : '<div class="pop-row" style="color:var(--ink-muted)">No city data</div>';
-    circle.bindPopup(`
-      <h4>${escapeHtml(r.name)}</h4>
-      <div class="pop-row"><span>Total raised</span><strong>${fmtMoney(r.total)}</strong></div>
-      <div class="pop-row"><span>Donors</span><strong>${fmtNum(r.count)}</strong></div>
-      <div class="pop-row"><span>Avg gift</span><strong>${fmtMoney(r.avg)}</strong></div>
-      <div style="margin-top: 10px; font-family: 'JetBrains Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--ink-muted);">Top cities</div>
-      ${cityList}
-    `);
-  });
+  // State-level bubbles render immediately as the baseline / fallback
+  function renderStateBubbles() {
+    const layerGroup = L.layerGroup();
+    stateRows.forEach(r => {
+      const c = STATE_CENTROIDS[r.code];
+      if (!c) return;
+      // Log-scaled radius — same reason as choropleth
+      const t = Math.log(1 + r.total) / Math.log(1 + maxTotal);
+      const radius = 8 + t * 28;
+      const circle = L.circleMarker(c, {
+        radius, fillColor: '#2F5D3E', color: '#1F4029',
+        weight: 1.5, opacity: 1, fillOpacity: 0.55
+      });
+      const cityList = r.topCities.length
+        ? r.topCities.map(ct => `<div class="pop-row"><span>${escapeHtml(ct.city)}</span><strong>${fmtMoney(ct.total)}</strong></div>`).join('')
+        : '<div class="pop-row" style="color:var(--ink-muted)">No city data</div>';
+      circle.bindPopup(`
+        <h4>${escapeHtml(r.name)}</h4>
+        <div class="pop-row"><span>Total raised</span><strong>${fmtMoney(r.total)}</strong></div>
+        <div class="pop-row"><span>Donors</span><strong>${fmtNum(r.count)}</strong></div>
+        <div class="pop-row"><span>Avg gift</span><strong>${fmtMoney(r.avg)}</strong></div>
+        <div style="margin-top: 10px; font-family: 'JetBrains Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--ink-muted);">Top cities</div>
+        ${cityList}
+      `);
+      layerGroup.addLayer(circle);
+    });
+    layerGroup.addTo(m2);
+    return layerGroup;
+  }
+
+  let activeBubbleLayer = renderStateBubbles();
+  setStatusBadge('state-fallback', stateRows.length);
+
+  // If zip column is mapped, try to upgrade to zip-level bubbles
+  if (state.mapping.zip) {
+    setStatusBadge('loading');
+    loadZipDb().then(zipDb => {
+      if (!zipDb || !zipDb.size) { setStatusBadge('state-fallback', stateRows.length); return; }
+
+      // Aggregate donors by zip
+      const zipAgg = new Map();
+      let matchedDonors = 0, unmatchedZips = 0;
+      const zipRunners = new Map(); // zip -> Map<runnerName, {total, count}>
+      state.thisData.forEach(r => {
+        let zipRaw = String(r[state.mapping.zip] || '').trim();
+        if (!zipRaw) return;
+        // Normalize: take first 5 digits, pad with leading zeros
+        const zipMatch = zipRaw.match(/\d{1,5}/);
+        if (!zipMatch) return;
+        const zip = zipMatch[0].padStart(5, '0');
+        if (!zipDb.has(zip)) { unmatchedZips += 1; return; }
+        const amt = parseAmount(r[state.mapping.amount]);
+        if (!zipAgg.has(zip)) zipAgg.set(zip, {
+          total: 0, count: 0,
+          city: state.mapping.city ? String(r[state.mapping.city] || '').trim() : '',
+          state: state.mapping.stateCol ? normalizeStateValue(r[state.mapping.stateCol]) : ''
+        });
+        const z = zipAgg.get(zip);
+        z.total += amt;
+        z.count += 1;
+        if (!z.city && state.mapping.city) z.city = String(r[state.mapping.city] || '').trim();
+        matchedDonors += 1;
+      });
+
+      if (!zipAgg.size) { setStatusBadge('state-fallback', stateRows.length, 'No zips matched'); return; }
+
+      // Swap state bubbles for zip bubbles
+      m2.removeLayer(activeBubbleLayer);
+
+      const zipTotals = [...zipAgg.values()].map(z => z.total);
+      const maxZip = Math.max(...zipTotals, 1);
+
+      const zipLayer = L.layerGroup();
+      zipAgg.forEach((data, zip) => {
+        const coords = zipDb.get(zip);
+        if (!coords) return;
+        // Log-scaled radius so a single dominant zip doesn't crush all the others
+        const t = Math.log(1 + data.total) / Math.log(1 + maxZip);
+        const radius = 4 + t * 22;
+        const circle = L.circleMarker(coords, {
+          radius, fillColor: '#B85C2C', color: '#7B3F1B',
+          weight: 1.2, opacity: 0.9, fillOpacity: 0.55
+        });
+        const locLabel = data.city ? `${escapeHtml(data.city)}${data.state ? ', ' + escapeHtml(data.state) : ''}` : zip;
+        circle.bindPopup(`
+          <h4>${locLabel} <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--ink-muted)">${zip}</span></h4>
+          <div class="pop-row"><span>Total raised</span><strong>${fmtMoney(data.total)}</strong></div>
+          <div class="pop-row"><span>Donors</span><strong>${fmtNum(data.count)}</strong></div>
+          <div class="pop-row"><span>Avg gift</span><strong>${fmtMoney(data.total / data.count)}</strong></div>
+        `);
+        zipLayer.addLayer(circle);
+      });
+      zipLayer.addTo(m2);
+      activeBubbleLayer = zipLayer;
+
+      setStatusBadge('zip', zipAgg.size, `${matchedDonors} donors mapped${unmatchedZips ? `, ${unmatchedZips} unmatched` : ''}`);
+    }).catch(err => {
+      console.warn('Zip DB load failed, falling back to state bubbles', err);
+      setStatusBadge('state-fallback', stateRows.length, 'Zip data unavailable');
+    });
+  }
+
+  function setStatusBadge(mode, count, sub) {
+    const card = markersEl.closest('.card');
+    if (!card) return;
+    const titleEl = card.querySelector('.card-title');
+    const subEl = card.querySelector('.card-sub');
+    if (mode === 'loading') {
+      if (titleEl) titleEl.innerHTML = 'Hot zones <span style="font-family:\'JetBrains Mono\',monospace;font-size:10px;color:var(--warm);text-transform:uppercase;letter-spacing:0.1em;margin-left:8px;">⌛ loading zip data</span>';
+      if (subEl) subEl.textContent = 'Fetching zip code coordinates…';
+    } else if (mode === 'zip') {
+      if (titleEl) titleEl.innerHTML = `Hot zones <span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--accent);text-transform:uppercase;letter-spacing:0.1em;margin-left:8px;">by zip</span>`;
+      if (subEl) subEl.textContent = `${count.toLocaleString()} zip codes${sub ? ' · ' + sub : ''}`;
+    } else {
+      if (titleEl) titleEl.innerHTML = `Hot zones <span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--ink-muted);text-transform:uppercase;letter-spacing:0.1em;margin-left:8px;">by state</span>`;
+      if (subEl) subEl.textContent = sub || `${count} states · map a zip column for finer detail`;
+    }
+  }
 
   // Force a refresh — Leaflet sometimes needs this when container was hidden
   setTimeout(() => { choro.invalidateSize(); m2.invalidateSize(); }, 100);
+}
+
+// Lazy-loaded US zip code → [lat, lng] database. Cached on `state` after first fetch.
+function loadZipDb() {
+  if (state.zipDb) return Promise.resolve(state.zipDb);
+  if (state.zipDbPromise) return state.zipDbPromise;
+
+  const ZIP_SOURCES = [
+    'https://raw.githubusercontent.com/scpike/us-state-county-zip/master/geo-data.csv',
+    'https://gist.githubusercontent.com/erichurst/7882666/raw/5bdc46db47d9515269ab12ed6fb2850377fd869e/US%20Zip%20Codes%20from%202013%20Government%20Data'
+  ];
+
+  function tryFetch(idx) {
+    if (idx >= ZIP_SOURCES.length) return Promise.reject(new Error('All zip sources failed'));
+    return fetch(ZIP_SOURCES[idx])
+      .then(r => r.ok ? r.text() : Promise.reject(new Error('HTTP ' + r.status)))
+      .then(text => parseZipCsv(text))
+      .then(db => {
+        if (!db || db.size < 1000) throw new Error('Suspiciously small zip db');
+        return db;
+      })
+      .catch(err => {
+        console.warn('zip source failed', ZIP_SOURCES[idx], err);
+        return tryFetch(idx + 1);
+      });
+  }
+
+  state.zipDbPromise = tryFetch(0).then(db => {
+    state.zipDb = db;
+    state.zipDbPromise = null;
+    return db;
+  });
+  return state.zipDbPromise;
+}
+
+function parseZipCsv(text) {
+  const m = new Map();
+  const lines = text.split(/\r?\n/);
+  // Detect column positions from header (sources vary in column order)
+  let zipIdx = 0, latIdx = 1, lngIdx = 2;
+  if (lines.length && /[a-zA-Z]/.test(lines[0])) {
+    const header = lines[0].toLowerCase().split(',').map(h => h.trim().replace(/"/g, ''));
+    const findCol = (names) => {
+      for (const n of names) { const i = header.indexOf(n); if (i >= 0) return i; }
+      return -1;
+    };
+    const z = findCol(['zip', 'zipcode', 'zip_code', 'postal_code']);
+    const la = findCol(['lat', 'latitude']);
+    const lo = findCol(['lng', 'lon', 'long', 'longitude']);
+    if (z >= 0 && la >= 0 && lo >= 0) { zipIdx = z; latIdx = la; lngIdx = lo; }
+    lines.shift(); // drop header row
+  }
+  for (const line of lines) {
+    if (!line) continue;
+    const parts = line.split(',').map(p => p.trim().replace(/^"|"$/g, ''));
+    if (parts.length <= Math.max(zipIdx, latIdx, lngIdx)) continue;
+    const zipMatch = parts[zipIdx].match(/\d{1,5}/);
+    if (!zipMatch) continue;
+    const zip = zipMatch[0].padStart(5, '0');
+    const lat = parseFloat(parts[latIdx]);
+    const lng = parseFloat(parts[lngIdx]);
+    if (isNaN(lat) || isNaN(lng)) continue;
+    if (lat < 17 || lat > 72 || lng < -180 || lng > -65) continue; // sanity: within US bounds
+    if (!m.has(zip)) m.set(zip, [lat, lng]);
+  }
+  return m;
 }
 
 // ============================================================
@@ -2156,23 +2328,7 @@ function buildTimeOfDay() {
       ctx.clearRect(0, 0, c.width, c.height);
       return;
     }
-    const max = Math.max(...data.amounts);
-    const min = Math.min(...data.amounts);
-    const edges = niceBins(min, max, 6);
-    const counts = new Array(edges.length - 1).fill(0);
-    for (const a of data.amounts) {
-      let idx = edges.length - 2;
-      for (let i = 0; i < edges.length - 1; i++) {
-        if (a >= edges[i] && a < edges[i + 1]) { idx = i; break; }
-        if (i === edges.length - 2 && a >= edges[i]) idx = i;
-      }
-      counts[idx] += 1;
-    }
-    const labels = [];
-    for (let i = 0; i < edges.length - 1; i++) {
-      const lo = edges[i], hi = edges[i + 1];
-      labels.push(i === edges.length - 2 ? `${fmtMoneyShort(lo)}+` : `${fmtMoneyShort(lo)}–${fmtMoneyShort(hi)}`);
-    }
+    const { labels, counts } = bucketAmounts(data.amounts);
     const ctx2 = document.getElementById('chartHourHisto').getContext('2d');
     state.charts.chartHourHisto = new Chart(ctx2, {
       type: 'bar',
