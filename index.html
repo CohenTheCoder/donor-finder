@@ -1995,7 +1995,8 @@ function renderMaps(stateAgg, stateRows) {
   function applyLayerMode(mode) {
     state.maps.currentMode = mode;
     const showChoro = (mode === 'states' || mode === 'both');
-    const showStateBubbles = (mode === 'states');
+    // State bubbles are redundant with the choropleth — bubbles are zip-only
+    const showStateBubbles = false;
     const showZipBubbles = (mode === 'zips' || mode === 'both');
     const fillOp = mode === 'states' ? 0.85 : 0.4;
 
