@@ -3,11 +3,14 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Lapsed Donor Finder</title>
+<title>Donor Dashboard</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,400&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
   :root {
     --bg: #F5EFE6;
@@ -23,8 +26,10 @@
     --accent-soft: #DDE8DC;
     --warm: #B85C2C;
     --warm-soft: #F2DDCB;
+    --gold: #C8A45D;
     --danger: #8B2E2E;
     --shadow: 0 1px 2px rgba(31, 26, 20, 0.04), 0 8px 24px rgba(31, 26, 20, 0.06);
+    --sidebar-w: 240px;
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -33,8 +38,8 @@
     background: var(--bg);
     color: var(--ink);
     font-family: 'Inter', system-ui, sans-serif;
-    font-size: 16px;
-    line-height: 1.6;
+    font-size: 15px;
+    line-height: 1.55;
     -webkit-font-smoothing: antialiased;
     min-height: 100vh;
   }
@@ -46,469 +51,573 @@
     background-attachment: fixed;
   }
 
-  .container {
-    max-width: 880px;
-    margin: 0 auto;
-    padding: 40px 24px 80px;
-  }
+  button { font-family: inherit; }
+  input, select { font-family: inherit; color: inherit; }
 
-  /* Header */
-  header {
-    border-bottom: 1px solid var(--line);
-    padding-bottom: 28px;
-    margin-bottom: 40px;
+  /* ===========================================================
+     AUTH GATE
+  =========================================================== */
+  .auth-overlay {
+    position: fixed; inset: 0; z-index: 9999;
+    background: var(--bg);
+    display: flex; align-items: center; justify-content: center;
+    padding: 24px;
   }
-  .eyebrow {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.18em;
-    color: var(--accent);
-    margin-bottom: 12px;
-  }
-  h1 {
-    font-family: 'Fraunces', serif;
-    font-weight: 500;
-    font-size: clamp(36px, 5vw, 56px);
-    line-height: 1.05;
-    letter-spacing: -0.02em;
-    margin-bottom: 14px;
-  }
-  h1 em {
-    font-style: italic;
-    font-weight: 400;
-    color: var(--accent);
-  }
-  .subtitle {
-    color: var(--ink-soft);
-    font-size: 17px;
-    max-width: 580px;
-  }
-  .privacy-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    margin-top: 18px;
-    padding: 6px 12px;
-    background: var(--accent-soft);
-    border: 1px solid rgba(47, 93, 62, 0.2);
-    border-radius: 100px;
-    font-size: 12px;
-    color: var(--accent-deep);
-    font-weight: 500;
-  }
-  .privacy-badge::before {
-    content: "●";
-    color: var(--accent);
-  }
-
-  /* Stepper */
-  .stepper {
-    display: flex;
-    gap: 4px;
-    margin-bottom: 36px;
-    align-items: center;
-    overflow-x: auto;
-    padding-bottom: 4px;
-  }
-  .step-pill {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 16px;
-    border-radius: 100px;
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--ink-muted);
-    background: transparent;
-    transition: all 0.3s ease;
-    white-space: nowrap;
-  }
-  .step-pill .num {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 11px;
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    background: var(--bg-soft);
-    color: var(--ink-muted);
-  }
-  .step-pill.active {
-    background: var(--ink);
-    color: var(--paper);
-  }
-  .step-pill.active .num {
-    background: var(--accent);
-    color: var(--paper);
-  }
-  .step-pill.done {
-    color: var(--accent);
-  }
-  .step-pill.done .num {
-    background: var(--accent);
-    color: var(--paper);
-  }
-  .step-pill.done .num::after {
-    content: "✓";
-  }
-  .step-pill.done .num span { display: none; }
-  .step-divider {
-    flex: 0 0 12px;
-    height: 1px;
-    background: var(--line);
-  }
-
-  /* Card */
-  .card {
+  .auth-card {
     background: var(--paper);
     border: 1px solid var(--line);
     border-radius: 16px;
-    padding: 36px;
+    padding: 40px 36px;
+    max-width: 440px;
+    width: 100%;
     box-shadow: var(--shadow);
   }
-  .card + .card { margin-top: 20px; }
-
-  .card-title {
+  .auth-eyebrow {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.18em;
+    color: var(--accent); margin-bottom: 12px;
+  }
+  .auth-title {
     font-family: 'Fraunces', serif;
-    font-weight: 500;
-    font-size: 28px;
-    letter-spacing: -0.01em;
+    font-weight: 500; font-size: 32px; line-height: 1.1; letter-spacing: -0.02em;
     margin-bottom: 8px;
   }
-  .card-desc {
-    color: var(--ink-soft);
-    margin-bottom: 28px;
+  .auth-title em { font-style: italic; color: var(--accent); font-weight: 400; }
+  .auth-sub { color: var(--ink-soft); font-size: 14px; margin-bottom: 24px; }
+  .auth-input {
+    width: 100%;
+    padding: 12px 14px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--bg-soft);
     font-size: 15px;
+    margin-bottom: 12px;
+  }
+  .auth-input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .auth-error {
+    color: var(--danger); font-size: 13px; margin-bottom: 12px;
+    background: #FBE9E9; padding: 10px 12px; border-radius: 8px;
+    border-left: 3px solid var(--danger);
+  }
+  .auth-help {
+    margin-top: 18px; padding-top: 18px;
+    border-top: 1px solid var(--line-soft);
+    font-size: 13px; color: var(--ink-muted); text-align: center;
+  }
+  .auth-help a { color: var(--accent); text-decoration: none; font-weight: 500; }
+  .auth-help a:hover { text-decoration: underline; }
+
+  /* ===========================================================
+     LAYOUT
+  =========================================================== */
+  .app { display: flex; min-height: 100vh; }
+
+  .sidebar {
+    width: var(--sidebar-w);
+    background: var(--paper);
+    border-right: 1px solid var(--line);
+    padding: 28px 18px 24px;
+    display: flex; flex-direction: column;
+    position: sticky; top: 0; height: 100vh;
+    flex-shrink: 0;
+  }
+  .brand {
+    padding: 0 10px 28px;
+    border-bottom: 1px solid var(--line-soft);
+    margin-bottom: 18px;
+  }
+  .brand-eyebrow {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.18em;
+    color: var(--accent); margin-bottom: 6px;
+  }
+  .brand-title {
+    font-family: 'Fraunces', serif;
+    font-size: 22px; font-weight: 500; line-height: 1.1;
+    letter-spacing: -0.01em;
+  }
+  .brand-title em { font-style: italic; color: var(--accent); font-weight: 400; }
+
+  .nav-section-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.15em;
+    color: var(--ink-muted); padding: 12px 12px 8px;
+  }
+  .nav-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    font-size: 14px; color: var(--ink-soft);
+    cursor: pointer;
+    background: none; border: none; width: 100%; text-align: left;
+    transition: all 0.15s ease;
+    margin-bottom: 2px;
+  }
+  .nav-item:hover { background: var(--bg-soft); color: var(--ink); }
+  .nav-item.active {
+    background: var(--ink); color: var(--paper);
+  }
+  .nav-item.disabled { opacity: 0.4; cursor: not-allowed; }
+  .nav-item .nav-icon { font-size: 14px; width: 18px; text-align: center; }
+  .nav-item .nav-badge {
+    margin-left: auto;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px; padding: 2px 6px;
+    background: var(--warm-soft); color: var(--warm);
+    border-radius: 100px;
+  }
+  .nav-item.active .nav-badge { background: var(--accent); color: var(--paper); }
+
+  .sidebar-footer {
+    margin-top: auto;
+    padding-top: 18px;
+    border-top: 1px solid var(--line-soft);
+    font-size: 12px;
+    color: var(--ink-muted);
+  }
+  .sidebar-footer .user-email {
+    padding: 0 12px 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; color: var(--ink-soft);
+    word-break: break-all;
+  }
+  .sidebar-footer button {
+    width: 100%; padding: 8px 12px;
+    background: none; border: 1px solid var(--line);
+    border-radius: 6px;
+    font-size: 12px; color: var(--ink-soft);
+    cursor: pointer;
+    margin-top: 6px;
+  }
+  .sidebar-footer button:hover { background: var(--bg-soft); color: var(--ink); }
+
+  .main {
+    flex: 1;
+    min-width: 0;
+    padding: 36px 44px 60px;
   }
 
-  /* Drop zones */
-  .drop-grid {
+  .page-header {
+    margin-bottom: 28px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--line);
+  }
+  .page-eyebrow {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.18em;
+    color: var(--accent); margin-bottom: 8px;
+  }
+  .page-title {
+    font-family: 'Fraunces', serif;
+    font-weight: 500; font-size: clamp(28px, 4vw, 42px);
+    line-height: 1.05; letter-spacing: -0.02em;
+    margin-bottom: 8px;
+  }
+  .page-title em { font-style: italic; color: var(--accent); font-weight: 400; }
+  .page-sub { color: var(--ink-soft); font-size: 15px; max-width: 640px; }
+  .page-meta {
+    display: flex; gap: 14px; flex-wrap: wrap;
+    margin-top: 14px;
+    font-size: 12px; color: var(--ink-muted);
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .page-meta span::before { content: "● "; color: var(--accent); }
+
+  /* ===========================================================
+     CARDS
+  =========================================================== */
+  .card {
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 24px;
+    box-shadow: var(--shadow);
+  }
+  .card-title {
+    font-family: 'Fraunces', serif;
+    font-weight: 500; font-size: 20px;
+    letter-spacing: -0.01em;
+    margin-bottom: 4px;
+  }
+  .card-sub {
+    color: var(--ink-muted); font-size: 13px;
+    margin-bottom: 18px;
+  }
+  .card-header {
+    display: flex; justify-content: space-between; align-items: flex-end;
+    margin-bottom: 18px; flex-wrap: wrap; gap: 12px;
+  }
+  .card-header .card-title { margin-bottom: 0; }
+  .card-header-controls {
+    display: flex; gap: 8px; align-items: center;
+  }
+
+  /* ===========================================================
+     KPI GRID
+  =========================================================== */
+  .kpi-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 16px;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 14px;
+    margin-bottom: 24px;
   }
-  @media (max-width: 640px) {
-    .drop-grid { grid-template-columns: 1fr; }
-    .card { padding: 24px; }
+  .kpi {
+    padding: 22px 22px 20px;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    position: relative; overflow: hidden;
+  }
+  .kpi.highlight {
+    background: var(--ink); color: var(--paper);
+    border-color: var(--ink);
+  }
+  .kpi.highlight .kpi-label { color: rgba(251, 247, 240, 0.6); }
+  .kpi.highlight .kpi-sub { color: rgba(251, 247, 240, 0.5); }
+  .kpi.accent {
+    background: var(--accent-soft);
+    border-color: rgba(47, 93, 62, 0.18);
+  }
+  .kpi-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.15em;
+    color: var(--ink-muted); margin-bottom: 10px;
+  }
+  .kpi-value {
+    font-family: 'Fraunces', serif;
+    font-size: 34px; font-weight: 500; line-height: 1;
+    letter-spacing: -0.02em;
+  }
+  .kpi-sub {
+    font-size: 12px; color: var(--ink-muted); margin-top: 6px;
   }
 
+  /* ===========================================================
+     CHARTS
+  =========================================================== */
+  .chart-row {
+    display: grid; gap: 18px;
+    grid-template-columns: 2fr 1fr;
+    margin-bottom: 18px;
+  }
+  @media (max-width: 1100px) {
+    .chart-row { grid-template-columns: 1fr; }
+  }
+  .chart-wrap {
+    position: relative;
+    height: 280px;
+    width: 100%;
+  }
+  .chart-wrap.tall { height: 360px; }
+  .chart-wrap.short { height: 220px; }
+
+  /* ===========================================================
+     TABLES
+  =========================================================== */
+  .table-wrap {
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    overflow: hidden;
+    background: var(--paper);
+  }
+  .table-header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 12px 16px;
+    background: var(--bg-soft);
+    border-bottom: 1px solid var(--line);
+    font-size: 12px; color: var(--ink-soft);
+  }
+  .table-scroll {
+    max-height: 460px;
+    overflow: auto;
+  }
+  table.dt {
+    width: 100%; border-collapse: collapse; font-size: 13px;
+  }
+  table.dt thead th {
+    position: sticky; top: 0;
+    background: var(--paper);
+    text-align: left;
+    padding: 10px 14px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em;
+    color: var(--ink-muted);
+    border-bottom: 1px solid var(--line);
+    font-weight: 500;
+  }
+  table.dt tbody td {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--line-soft);
+    vertical-align: top;
+  }
+  table.dt tbody tr:last-child td { border-bottom: none; }
+  table.dt tbody tr:hover { background: var(--bg-soft); }
+  td.num, th.num { text-align: right; font-family: 'JetBrains Mono', monospace; font-weight: 500; white-space: nowrap; }
+  td.delta-down { color: var(--danger); }
+  td.delta-up { color: var(--accent); }
+
+  .rank-num {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 22px; height: 22px;
+    background: var(--bg-soft);
+    color: var(--ink-soft);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; font-weight: 500;
+    border-radius: 50%;
+  }
+  .rank-num.gold { background: var(--gold); color: white; }
+  .rank-num.silver { background: #BAB5AB; color: white; }
+  .rank-num.bronze { background: #B07355; color: white; }
+
+  /* ===========================================================
+     BUTTONS
+  =========================================================== */
+  .btn {
+    font-family: 'Inter', sans-serif;
+    font-weight: 500; font-size: 14px;
+    padding: 10px 18px;
+    border-radius: 100px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .btn-primary { background: var(--ink); color: var(--paper); }
+  .btn-primary:hover:not(:disabled) { background: var(--accent-deep); }
+  .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-ghost {
+    background: transparent; color: var(--ink); border-color: var(--line);
+  }
+  .btn-ghost:hover { background: var(--bg-soft); }
+  .btn-sm { padding: 6px 12px; font-size: 12px; }
+
+  /* ===========================================================
+     UPLOAD
+  =========================================================== */
+  .drop-grid {
+    display: grid; gap: 14px;
+    grid-template-columns: 1fr 1fr;
+  }
+  @media (max-width: 720px) {
+    .drop-grid { grid-template-columns: 1fr; }
+  }
   .drop-zone {
     position: relative;
     border: 2px dashed var(--line);
     border-radius: 12px;
     padding: 28px 20px;
-    text-align: center;
-    cursor: pointer;
+    text-align: center; cursor: pointer;
     transition: all 0.2s ease;
     background: var(--bg-soft);
-    min-height: 180px;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    gap: 10px;
+    min-height: 170px;
+    display: flex; flex-direction: column; justify-content: center; gap: 10px;
   }
-  .drop-zone:hover {
-    border-color: var(--accent);
-    background: var(--accent-soft);
-  }
+  .drop-zone:hover { border-color: var(--accent); background: var(--accent-soft); }
   .drop-zone.has-file {
-    border-style: solid;
-    border-color: var(--accent);
-    background: var(--accent-soft);
+    border-style: solid; border-color: var(--accent); background: var(--accent-soft);
   }
   .drop-zone.dragging {
-    border-color: var(--accent);
-    background: var(--accent-soft);
-    transform: scale(1.01);
+    border-color: var(--accent); background: var(--accent-soft); transform: scale(1.01);
   }
   .drop-zone input[type="file"] { display: none; }
   .drop-label {
     font-family: 'JetBrains Mono', monospace;
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.15em;
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.15em;
     color: var(--ink-muted);
   }
   .drop-zone.has-file .drop-label { color: var(--accent); }
-  .drop-title {
-    font-family: 'Fraunces', serif;
-    font-size: 20px;
-    font-weight: 500;
-  }
-  .drop-hint {
-    font-size: 13px;
-    color: var(--ink-muted);
-  }
-  .file-info {
-    display: none;
-    flex-direction: column;
-    gap: 4px;
-  }
+  .drop-title { font-family: 'Fraunces', serif; font-size: 19px; font-weight: 500; }
+  .drop-hint { font-size: 13px; color: var(--ink-muted); }
+  .file-info { display: none; flex-direction: column; gap: 4px; }
   .drop-zone.has-file .file-info { display: flex; }
   .drop-zone.has-file .drop-title-default,
   .drop-zone.has-file .drop-hint-default { display: none; }
-  .file-name {
-    font-weight: 600;
-    font-size: 14px;
-    word-break: break-all;
-  }
-  .file-stats {
-    font-size: 12px;
-    color: var(--ink-soft);
-    font-family: 'JetBrains Mono', monospace;
-  }
+  .file-name { font-weight: 600; font-size: 14px; word-break: break-all; }
+  .file-stats { font-size: 12px; color: var(--ink-soft); font-family: 'JetBrains Mono', monospace; }
   .file-clear {
-    background: none;
-    border: 1px solid var(--line);
-    color: var(--ink-soft);
-    padding: 4px 10px;
-    border-radius: 100px;
-    font-size: 11px;
-    cursor: pointer;
-    margin-top: 8px;
-    align-self: center;
+    background: none; border: 1px solid var(--line);
+    color: var(--ink-soft); padding: 4px 10px; border-radius: 100px;
+    font-size: 11px; cursor: pointer; margin-top: 8px; align-self: center;
   }
   .file-clear:hover { color: var(--danger); border-color: var(--danger); }
 
-  /* Buttons */
-  .btn {
-    font-family: 'Inter', sans-serif;
-    font-weight: 500;
-    font-size: 15px;
-    padding: 14px 28px;
+  .opt-tag {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 2px 8px;
+    background: var(--bg-soft);
+    color: var(--ink-muted);
     border-radius: 100px;
-    border: 1px solid transparent;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-  }
-  .btn-primary {
-    background: var(--ink);
-    color: var(--paper);
-  }
-  .btn-primary:hover:not(:disabled) {
-    background: var(--accent-deep);
-  }
-  .btn-primary:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-  }
-  .btn-ghost {
-    background: transparent;
-    color: var(--ink);
-    border-color: var(--line);
-  }
-  .btn-ghost:hover { background: var(--bg-soft); }
-  .btn-arrow::after {
-    content: "→";
-    font-size: 18px;
-    transition: transform 0.2s ease;
-  }
-  .btn-arrow:hover:not(:disabled)::after { transform: translateX(3px); }
-  .actions {
-    margin-top: 28px;
-    display: flex;
-    gap: 12px;
-    justify-content: flex-end;
-    flex-wrap: wrap;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
   }
 
-  /* Mapping */
-  .mapping-grid {
-    display: grid;
-    gap: 12px;
-  }
+  /* ===========================================================
+     MAPPING
+  =========================================================== */
+  .mapping-grid { display: grid; gap: 10px; }
   .map-row {
     display: grid;
-    grid-template-columns: 200px 1fr auto;
-    gap: 12px;
-    align-items: center;
-    padding: 14px 16px;
+    grid-template-columns: 220px 1fr auto;
+    gap: 12px; align-items: center;
+    padding: 12px 14px;
     background: var(--bg-soft);
     border-radius: 10px;
     border: 1px solid var(--line-soft);
   }
-  @media (max-width: 640px) {
-    .map-row {
-      grid-template-columns: 1fr;
-      gap: 6px;
-    }
+  @media (max-width: 720px) {
+    .map-row { grid-template-columns: 1fr; gap: 6px; }
   }
-  .map-label {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-  .map-label-name {
-    font-weight: 600;
-    font-size: 14px;
-  }
-  .map-label-hint {
-    font-size: 12px;
-    color: var(--ink-muted);
-  }
-  .map-row select, .map-row input[type="text"] {
-    font-family: 'Inter', sans-serif;
-    font-size: 14px;
-    padding: 9px 12px;
-    border: 1px solid var(--line);
-    border-radius: 8px;
+  .map-label-name { font-weight: 600; font-size: 14px; }
+  .map-label-hint { font-size: 12px; color: var(--ink-muted); }
+  .map-row select {
+    font-size: 14px; padding: 8px 12px;
+    border: 1px solid var(--line); border-radius: 8px;
     background: var(--paper);
-    color: var(--ink);
     width: 100%;
   }
-  .map-row select:focus, .map-row input[type="text"]:focus {
-    outline: 2px solid var(--accent);
-    outline-offset: -1px;
-    border-color: var(--accent);
-  }
+  .map-row select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
   .auto-tag {
     font-family: 'JetBrains Mono', monospace;
-    font-size: 10px;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    padding: 3px 8px;
-    border-radius: 100px;
-    white-space: nowrap;
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em;
+    padding: 3px 8px; border-radius: 100px; white-space: nowrap;
   }
-  .auto-tag.detected {
-    background: var(--accent-soft);
-    color: var(--accent-deep);
-  }
-  .auto-tag.missing {
-    background: var(--warm-soft);
-    color: var(--warm);
-  }
-  .auto-tag.optional {
-    background: var(--bg-soft);
-    color: var(--ink-muted);
-  }
+  .auto-tag.detected { background: var(--accent-soft); color: var(--accent-deep); }
+  .auto-tag.missing { background: var(--warm-soft); color: var(--warm); }
+  .auto-tag.optional { background: var(--bg-soft); color: var(--ink-muted); }
 
   .info-box {
     background: var(--warm-soft);
     border-left: 3px solid var(--warm);
-    padding: 14px 18px;
+    padding: 12px 16px;
     border-radius: 8px;
-    font-size: 14px;
-    margin-top: 20px;
-    color: var(--ink-soft);
+    font-size: 13px; color: var(--ink-soft);
+    margin-top: 16px;
   }
   .info-box strong { color: var(--ink); }
-
-  /* Results */
-  .stats-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-    gap: 14px;
-    margin-bottom: 28px;
-  }
-  .stat {
-    padding: 22px 20px;
-    background: var(--bg-soft);
-    border: 1px solid var(--line-soft);
-    border-radius: 12px;
-  }
-  .stat.highlight {
-    background: var(--accent-soft);
-    border-color: rgba(47, 93, 62, 0.2);
-  }
-  .stat-label {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 10px;
-    text-transform: uppercase;
-    letter-spacing: 0.15em;
-    color: var(--ink-muted);
-    margin-bottom: 8px;
-  }
-  .stat.highlight .stat-label { color: var(--accent-deep); }
-  .stat-value {
-    font-family: 'Fraunces', serif;
-    font-size: 36px;
-    font-weight: 500;
-    line-height: 1;
-    letter-spacing: -0.02em;
-  }
-  .stat-sub {
-    font-size: 12px;
-    color: var(--ink-muted);
-    margin-top: 4px;
-  }
-
-  /* Table */
-  .table-wrap {
-    border: 1px solid var(--line);
-    border-radius: 12px;
-    overflow: hidden;
-    margin-top: 20px;
-  }
-  .table-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 14px 18px;
-    background: var(--bg-soft);
-    border-bottom: 1px solid var(--line);
-    font-size: 13px;
-    color: var(--ink-soft);
-  }
-  .table-scroll {
-    max-height: 420px;
-    overflow: auto;
-  }
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 13px;
-  }
-  thead th {
-    position: sticky;
-    top: 0;
-    background: var(--paper);
-    text-align: left;
-    padding: 10px 14px;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 10px;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    color: var(--ink-muted);
-    border-bottom: 1px solid var(--line);
-    font-weight: 500;
-  }
-  tbody td {
-    padding: 10px 14px;
-    border-bottom: 1px solid var(--line-soft);
-    vertical-align: top;
-  }
-  tbody tr:last-child td { border-bottom: none; }
-  tbody tr:hover { background: var(--bg-soft); }
-  td.amount {
-    font-family: 'JetBrains Mono', monospace;
-    font-weight: 500;
-    text-align: right;
-    white-space: nowrap;
-  }
-
-  /* Errors */
   .error-box {
     background: #FBE9E9;
     border-left: 3px solid var(--danger);
-    padding: 14px 18px;
-    border-radius: 8px;
-    color: var(--danger);
-    font-size: 14px;
-    margin-top: 16px;
+    padding: 12px 16px; border-radius: 8px;
+    color: var(--danger); font-size: 13px;
+    margin-top: 12px;
   }
 
-  /* Loader */
+  /* ===========================================================
+     SUBTABS
+  =========================================================== */
+  .subtabs {
+    display: inline-flex;
+    background: var(--bg-soft);
+    padding: 4px; border-radius: 100px;
+    margin-bottom: 18px;
+  }
+  .subtab {
+    padding: 8px 16px;
+    border: none; background: none;
+    font-size: 13px; font-weight: 500;
+    color: var(--ink-muted); cursor: pointer;
+    border-radius: 100px;
+    transition: all 0.15s ease;
+  }
+  .subtab.active {
+    background: var(--paper); color: var(--ink);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+  }
+
+  /* ===========================================================
+     EMPTY STATES
+  =========================================================== */
+  .empty {
+    text-align: center; padding: 60px 24px;
+    color: var(--ink-muted);
+  }
+  .empty-icon {
+    font-family: 'Fraunces', serif; font-size: 48px;
+    color: var(--line); margin-bottom: 14px;
+  }
+  .empty-title {
+    font-family: 'Fraunces', serif; font-size: 22px;
+    color: var(--ink-soft); margin-bottom: 6px; font-weight: 500;
+  }
+  .empty-sub { font-size: 14px; max-width: 380px; margin: 0 auto; }
+
+  /* ===========================================================
+     MAPS
+  =========================================================== */
+  #choroplethMap, #markerMap {
+    height: 460px;
+    border-radius: 12px;
+    border: 1px solid var(--line);
+    background: var(--bg-soft);
+  }
+  .map-legend {
+    display: flex; gap: 4px; align-items: center;
+    font-size: 12px; color: var(--ink-soft);
+    margin-top: 8px; flex-wrap: wrap;
+  }
+  .legend-swatch {
+    display: inline-block;
+    width: 22px; height: 12px;
+    border: 1px solid rgba(0,0,0,0.05);
+  }
+  .leaflet-popup-content {
+    font-family: 'Inter', sans-serif !important;
+    font-size: 13px !important;
+    margin: 12px 14px !important;
+  }
+  .leaflet-popup-content h4 {
+    font-family: 'Fraunces', serif;
+    font-weight: 500; font-size: 16px;
+    margin-bottom: 6px;
+  }
+  .leaflet-popup-content .pop-row {
+    display: flex; justify-content: space-between; gap: 12px;
+    padding: 2px 0;
+    border-top: 1px solid var(--line-soft);
+  }
+  .leaflet-popup-content .pop-row:first-of-type { border-top: none; padding-top: 6px; }
+
+  /* ===========================================================
+     UTIL
+  =========================================================== */
+  .hidden { display: none !important; }
+
+  .stack { display: flex; flex-direction: column; gap: 18px; }
+  .grid-2 {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 18px;
+  }
+  @media (max-width: 1000px) { .grid-2 { grid-template-columns: 1fr; } }
+
+  /* Mobile sidebar */
+  .menu-toggle {
+    display: none;
+    position: fixed; top: 16px; left: 16px; z-index: 100;
+    background: var(--paper); border: 1px solid var(--line);
+    border-radius: 10px;
+    width: 40px; height: 40px;
+    align-items: center; justify-content: center;
+    cursor: pointer;
+    box-shadow: var(--shadow);
+  }
+  @media (max-width: 800px) {
+    .menu-toggle { display: flex; }
+    .sidebar {
+      position: fixed; left: 0; top: 0; bottom: 0;
+      transform: translateX(-100%);
+      transition: transform 0.25s ease;
+      z-index: 99;
+    }
+    .sidebar.open { transform: translateX(0); }
+    .main { padding: 70px 20px 40px; }
+  }
+
+  /* Loading */
   .loader {
     display: inline-block;
-    width: 14px;
-    height: 14px;
+    width: 14px; height: 14px;
     border: 2px solid currentColor;
     border-right-color: transparent;
     border-radius: 50%;
@@ -516,160 +625,284 @@
   }
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  .hidden { display: none !important; }
-
-  .footer {
-    text-align: center;
-    color: var(--ink-muted);
-    font-size: 13px;
-    margin-top: 60px;
-    padding-top: 28px;
-    border-top: 1px solid var(--line);
-  }
-  .footer em {
-    font-family: 'Fraunces', serif;
-    color: var(--ink-soft);
-  }
-
-  /* Subtle reveal */
-  .card, .stats-grid, .table-wrap {
-    animation: fadeUp 0.5s ease backwards;
+  .fade-in {
+    animation: fadeUp 0.35s ease backwards;
   }
   @keyframes fadeUp {
-    from { opacity: 0; transform: translateY(8px); }
+    from { opacity: 0; transform: translateY(6px); }
     to { opacity: 1; transform: translateY(0); }
   }
+
+  .footer-note {
+    margin-top: 40px; padding-top: 24px;
+    border-top: 1px solid var(--line);
+    text-align: center;
+    color: var(--ink-muted); font-size: 12px;
+  }
+  .footer-note em { font-family: 'Fraunces', serif; color: var(--ink-soft); }
 </style>
 </head>
 <body>
-<div class="container">
 
-  <header>
-    <div class="eyebrow">Lapsed Donor Finder · v1.0</div>
-    <h1>Find the donors who <em>didn't come back</em>.</h1>
-    <p class="subtitle">Upload last year's and this year's donor lists. We'll find everyone from last year who's missing this year — matching by name, email, phone, and even spouse names.</p>
-    <div class="privacy-badge">All processing happens in your browser. No data is uploaded anywhere.</div>
-  </header>
-
-  <!-- STEPPER -->
-  <div class="stepper">
-    <div class="step-pill active" data-step="1"><span class="num"><span>1</span></span> Upload files</div>
-    <div class="step-divider"></div>
-    <div class="step-pill" data-step="2"><span class="num"><span>2</span></span> Match columns</div>
-    <div class="step-divider"></div>
-    <div class="step-pill" data-step="3"><span class="num"><span>3</span></span> Review results</div>
+<!-- ===========================================================
+     AUTH GATE
+============================================================ -->
+<div id="authOverlay" class="auth-overlay">
+  <div class="auth-card">
+    <div class="auth-eyebrow">Donor Dashboard · v2.0</div>
+    <h1 class="auth-title">Welcome <em>back</em>.</h1>
+    <p class="auth-sub">Enter your approved email to continue.</p>
+    <input type="email" id="authEmail" class="auth-input" placeholder="you@example.com" autocomplete="email" />
+    <div id="authError" class="auth-error hidden"></div>
+    <button id="authBtn" class="btn btn-primary" style="width: 100%; justify-content: center;">Enter dashboard</button>
+    <div class="auth-help">
+      Don't have access? <a id="requestAccessLink" href="#">Request access</a>
+    </div>
   </div>
+</div>
 
-  <!-- STEP 1: UPLOAD -->
-  <section id="step-1" class="card">
-    <h2 class="card-title">Drop in your two files</h2>
-    <p class="card-desc">Excel (.xlsx, .xls) or CSV. The order matters — make sure last year goes on the left and this year on the right.</p>
+<!-- ===========================================================
+     MAIN APP
+============================================================ -->
+<button id="menuToggle" class="menu-toggle" aria-label="Toggle menu">
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+</button>
 
-    <div class="drop-grid">
-      <label class="drop-zone" id="dropLast">
-        <input type="file" accept=".xlsx,.xls,.csv" data-target="last">
-        <div class="drop-label">Last year</div>
-        <div class="drop-title drop-title-default">Drop file here</div>
-        <div class="drop-hint drop-hint-default">or click to browse</div>
-        <div class="file-info">
-          <div class="file-name"></div>
-          <div class="file-stats"></div>
-          <button type="button" class="file-clear">Remove</button>
-        </div>
-      </label>
-
-      <label class="drop-zone" id="dropThis">
-        <input type="file" accept=".xlsx,.xls,.csv" data-target="this">
-        <div class="drop-label">This year</div>
-        <div class="drop-title drop-title-default">Drop file here</div>
-        <div class="drop-hint drop-hint-default">or click to browse</div>
-        <div class="file-info">
-          <div class="file-name"></div>
-          <div class="file-stats"></div>
-          <button type="button" class="file-clear">Remove</button>
-        </div>
-      </label>
+<div class="app hidden" id="app">
+  <!-- SIDEBAR -->
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <div class="brand-eyebrow">Fundraiser tools</div>
+      <div class="brand-title">Donor <em>Dashboard</em></div>
     </div>
 
-    <div id="uploadError" class="error-box hidden"></div>
+    <div class="nav-section-label">Pages</div>
+    <button class="nav-item active" data-page="overview"><span class="nav-icon">◐</span> Overview</button>
+    <button class="nav-item" data-page="lapsed"><span class="nav-icon">↺</span> Lapsed Donors</button>
+    <button class="nav-item" data-page="geography"><span class="nav-icon">◉</span> Geography</button>
+    <button class="nav-item" data-page="time"><span class="nav-icon">◴</span> Time of Day</button>
+    <button class="nav-item" data-page="runners"><span class="nav-icon">★</span> Runners &amp; Teams</button>
 
-    <div class="actions">
-      <button id="goToStep2" class="btn btn-primary btn-arrow" disabled>Continue</button>
+    <div class="nav-section-label" style="margin-top: 16px;">Data</div>
+    <button class="nav-item" data-page="upload"><span class="nav-icon">↑</span> Upload / Mapping</button>
+
+    <div class="sidebar-footer">
+      <div class="user-email" id="userEmailDisplay"></div>
+      <button id="logoutBtn">Sign out</button>
     </div>
-  </section>
+  </aside>
 
-  <!-- STEP 2: MAPPING -->
-  <section id="step-2" class="card hidden">
-    <h2 class="card-title">Confirm your columns</h2>
-    <p class="card-desc">We tried to auto-detect each field. Adjust any that look wrong. Required fields need a column; the optional one can stay blank.</p>
+  <!-- MAIN CONTENT -->
+  <main class="main">
 
-    <div class="mapping-grid" id="mappingGrid"></div>
-
-    <div class="info-box">
-      <strong>Don't worry about formatting.</strong> Phone numbers, capitalization, extra spaces, and even spouse names like <em>"Dave &amp; Jane"</em> are all handled automatically.
-    </div>
-
-    <div id="mapError" class="error-box hidden"></div>
-
-    <div class="actions">
-      <button id="backToStep1" class="btn btn-ghost">← Back</button>
-      <button id="runAnalysis" class="btn btn-primary btn-arrow">Run analysis</button>
-    </div>
-  </section>
-
-  <!-- STEP 3: RESULTS -->
-  <section id="step-3" class="card hidden">
-    <h2 class="card-title">Lapsed donors</h2>
-    <p class="card-desc">These donors gave last year but couldn't be matched to anyone this year — by name, email, phone, or any spouse variant.</p>
-
-    <div class="stats-grid" id="statsGrid"></div>
-
-    <div class="table-wrap">
-      <div class="table-header">
-        <span id="tablePreviewLabel">Preview</span>
-        <span id="tableSortHint">Sorted by amount, highest first</span>
+    <!-- =========================================================
+         UPLOAD PAGE
+    ========================================================== -->
+    <section id="page-upload" class="page hidden">
+      <div class="page-header">
+        <div class="page-eyebrow">Step 01</div>
+        <h1 class="page-title">Bring your <em>data</em>.</h1>
+        <p class="page-sub">Upload your current donor file to power the dashboard. Add last year's file too if you want to find lapsed donors and downgrades.</p>
       </div>
-      <div class="table-scroll">
-        <table id="resultsTable">
-          <thead></thead>
-          <tbody></tbody>
-        </table>
+
+      <div class="card">
+        <h2 class="card-title">Files</h2>
+        <p class="card-sub">Excel (.xlsx, .xls) or CSV. Everything stays in your browser.</p>
+
+        <div class="drop-grid">
+          <label class="drop-zone" id="dropThis">
+            <input type="file" accept=".xlsx,.xls,.csv" data-target="this">
+            <div class="drop-label">Current period</div>
+            <div class="drop-title drop-title-default">Drop file here</div>
+            <div class="drop-hint drop-hint-default">or click to browse</div>
+            <div class="file-info">
+              <div class="file-name"></div>
+              <div class="file-stats"></div>
+              <button type="button" class="file-clear">Remove</button>
+            </div>
+          </label>
+
+          <label class="drop-zone" id="dropLast">
+            <input type="file" accept=".xlsx,.xls,.csv" data-target="last">
+            <div class="drop-label">Comparison period <span class="opt-tag">optional</span></div>
+            <div class="drop-title drop-title-default">Drop file here</div>
+            <div class="drop-hint drop-hint-default">for lapsed &amp; downgrade analysis</div>
+            <div class="file-info">
+              <div class="file-name"></div>
+              <div class="file-stats"></div>
+              <button type="button" class="file-clear">Remove</button>
+            </div>
+          </label>
+        </div>
+
+        <div id="uploadError" class="error-box hidden"></div>
       </div>
-    </div>
 
-    <div class="actions">
-      <button id="backToStep2" class="btn btn-ghost">← Adjust columns</button>
-      <button id="startOver" class="btn btn-ghost">Start over</button>
-      <button id="downloadCsv" class="btn btn-primary">⬇ Download CSV</button>
-    </div>
-  </section>
+      <div class="card" id="mappingCard" style="margin-top: 18px;">
+        <h2 class="card-title">Match your columns</h2>
+        <p class="card-sub">Auto-detected from your headers. Adjust anything that looks off.</p>
 
-  <div class="footer">
-    Built for fundraisers who <em>care</em>. Open-source, free forever.
-  </div>
+        <div class="mapping-grid" id="mappingGrid"></div>
+
+        <div class="info-box">
+          <strong>Don't worry about formatting.</strong> Phone numbers, capitalization, extra spaces, dates with or without time, and even spouse names like <em>"Dave &amp; Jane"</em> are all handled.
+        </div>
+
+        <div id="mapError" class="error-box hidden"></div>
+
+        <div style="margin-top: 22px; display: flex; justify-content: flex-end;">
+          <button id="runAnalysis" class="btn btn-primary">Build dashboard →</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- =========================================================
+         OVERVIEW PAGE
+    ========================================================== -->
+    <section id="page-overview" class="page">
+      <div class="page-header">
+        <div class="page-eyebrow">Overview</div>
+        <h1 class="page-title">Your campaign at a <em>glance</em>.</h1>
+        <p class="page-sub">The numbers that matter, plus how giving has flowed over time.</p>
+        <div class="page-meta" id="overviewMeta"></div>
+      </div>
+      <div id="overview-content"></div>
+    </section>
+
+    <!-- =========================================================
+         LAPSED PAGE
+    ========================================================== -->
+    <section id="page-lapsed" class="page hidden">
+      <div class="page-header">
+        <div class="page-eyebrow">Retention</div>
+        <h1 class="page-title">Who <em>didn't</em> come back?</h1>
+        <p class="page-sub">Find donors from last year who are missing this year, and donors whose gifts shrank.</p>
+      </div>
+      <div id="lapsed-content"></div>
+    </section>
+
+    <!-- =========================================================
+         GEOGRAPHY PAGE
+    ========================================================== -->
+    <section id="page-geography" class="page hidden">
+      <div class="page-header">
+        <div class="page-eyebrow">Geography</div>
+        <h1 class="page-title">Where the <em>money</em> comes from.</h1>
+        <p class="page-sub">Hot zones across the country, at the state level.</p>
+      </div>
+      <div id="geography-content"></div>
+    </section>
+
+    <!-- =========================================================
+         TIME OF DAY PAGE
+    ========================================================== -->
+    <section id="page-time" class="page hidden">
+      <div class="page-header">
+        <div class="page-eyebrow">Timing</div>
+        <h1 class="page-title">When people <em>open their hearts</em>.</h1>
+        <p class="page-sub">Donation patterns by hour of day.</p>
+      </div>
+      <div id="time-content"></div>
+    </section>
+
+    <!-- =========================================================
+         RUNNERS PAGE
+    ========================================================== -->
+    <section id="page-runners" class="page hidden">
+      <div class="page-header">
+        <div class="page-eyebrow">Champions</div>
+        <h1 class="page-title">Your top <em>raisers</em>.</h1>
+        <p class="page-sub">Leaderboards by total raised, donations collected, and average gift size.</p>
+      </div>
+      <div id="runners-content"></div>
+    </section>
+
+    <div class="footer-note">
+      Built for fundraisers who <em>care</em>. All processing happens in your browser.
+    </div>
+  </main>
 </div>
 
 <script>
 // ============================================================
+// AUTH — approved email allowlist
+// To approve a new user: add their lowercased email to this array.
+// ============================================================
+const APPROVED_EMAILS = [
+  'arieljosephcohen@gmail.com',
+  // Add more approved emails below, one per line:
+  // 'someone@example.com',
+];
+const OWNER_EMAIL = 'arieljosephcohen@gmail.com';
+const AUTH_KEY = 'donor_dashboard_auth_email';
+
+function tryAutoLogin() {
+  const stored = localStorage.getItem(AUTH_KEY);
+  if (stored && APPROVED_EMAILS.includes(stored.toLowerCase())) {
+    enterApp(stored);
+    return true;
+  }
+  return false;
+}
+function enterApp(email) {
+  localStorage.setItem(AUTH_KEY, email.toLowerCase());
+  document.getElementById('authOverlay').classList.add('hidden');
+  document.getElementById('app').classList.remove('hidden');
+  document.getElementById('userEmailDisplay').textContent = email.toLowerCase();
+}
+document.getElementById('authBtn').addEventListener('click', handleAuth);
+document.getElementById('authEmail').addEventListener('keydown', e => { if (e.key === 'Enter') handleAuth(); });
+function handleAuth() {
+  const email = document.getElementById('authEmail').value.trim().toLowerCase();
+  const errEl = document.getElementById('authError');
+  if (!email || !email.includes('@')) {
+    errEl.textContent = 'Please enter a valid email.';
+    errEl.classList.remove('hidden');
+    return;
+  }
+  if (!APPROVED_EMAILS.includes(email)) {
+    errEl.innerHTML = `That email isn't approved yet. <a href="#" id="requestAccessLinkInline" style="color:inherit;text-decoration:underline">Request access?</a>`;
+    errEl.classList.remove('hidden');
+    document.getElementById('requestAccessLinkInline').addEventListener('click', requestAccess);
+    return;
+  }
+  errEl.classList.add('hidden');
+  enterApp(email);
+}
+function requestAccess(e) {
+  if (e) e.preventDefault();
+  const userEmail = document.getElementById('authEmail').value.trim() || 'your-email@example.com';
+  const subject = encodeURIComponent('Donor Dashboard — Access Request');
+  const body = encodeURIComponent(
+    `Hi Ariel,\n\nI'd like access to the Donor Dashboard.\n\nMy email: ${userEmail}\nName: \nOrganization: \n\nThanks!`
+  );
+  window.location.href = `mailto:${OWNER_EMAIL}?subject=${subject}&body=${body}`;
+}
+document.getElementById('requestAccessLink').addEventListener('click', requestAccess);
+document.getElementById('logoutBtn').addEventListener('click', () => {
+  if (!confirm('Sign out of the dashboard?')) return;
+  localStorage.removeItem(AUTH_KEY);
+  location.reload();
+});
+if (!tryAutoLogin()) {
+  // Show auth overlay (already visible by default)
+  setTimeout(() => document.getElementById('authEmail').focus(), 100);
+}
+
+// ============================================================
 // STATE
 // ============================================================
 const state = {
-  lastFile: null,
-  thisFile: null,
-  lastData: null,    // array of row objects
-  thisData: null,
-  lastColumns: [],
-  thisColumns: [],
+  thisFile: null, lastFile: null,
+  thisData: null, lastData: null,
+  thisColumns: [], lastColumns: [],
   mapping: {
-    firstName: '',
-    lastName: '',
-    email: '',
-    phone: '',
-    amount: '',
-    runner: ''       // optional
+    firstName: '', lastName: '', email: '', phone: '', amount: '',
+    runner: '', date: '', city: '', stateCol: '', zip: ''
   },
-  runnerLabel: 'RunnerName',
-  results: null
+  built: false,
+  charts: {},
+  maps: { choro: null, markers: null }
 };
 
 // ============================================================
@@ -681,117 +914,179 @@ const FIELD_HINTS = {
   email: ['email', 'e-mail', 'emailaddress', 'email address', 'mail'],
   phone: ['phone', 'phonenumber', 'phone number', 'telephone', 'tel', 'mobile', 'cell', 'cellphone'],
   amount: ['amount', 'donation', 'donationamount', 'donation amount', 'gift', 'giftamount', 'gift amount', 'total', 'amount donated', 'value'],
-  runner: ['runnername', 'runner name', 'runner', 'captain', 'team', 'team name', 'teamname', 'fundraiser', 'in honor of', 'inhonorof']
+  runner: ['runnername', 'runner name', 'runner', 'captain', 'team', 'team name', 'teamname', 'fundraiser', 'in honor of', 'inhonorof'],
+  date: ['date', 'datetime', 'date time', 'timestamp', 'donation date', 'donationdate', 'created', 'created at', 'createdat', 'gift date', 'giftdate', 'transactiondate', 'transaction date'],
+  city: ['city', 'town', 'municipality'],
+  stateCol: ['state', 'province', 'region'],
+  zip: ['zip', 'zipcode', 'zip code', 'postal', 'postal code', 'postalcode']
 };
-
 function normalizeColName(s) {
   return String(s || '').toLowerCase().replace(/[\s_\-\.]/g, '').trim();
 }
-
 function autoDetectColumn(columns, hints) {
-  const normalizedCols = columns.map(c => ({ orig: c, norm: normalizeColName(c) }));
-  // exact match first
-  for (const hint of hints) {
-    const h = normalizeColName(hint);
-    const found = normalizedCols.find(c => c.norm === h);
-    if (found) return found.orig;
+  const norm = columns.map(c => ({ orig: c, norm: normalizeColName(c) }));
+  for (const h of hints) {
+    const hn = normalizeColName(h);
+    const f = norm.find(c => c.norm === hn);
+    if (f) return f.orig;
   }
-  // partial match
-  for (const hint of hints) {
-    const h = normalizeColName(hint);
-    const found = normalizedCols.find(c => c.norm.includes(h) || h.includes(c.norm));
-    if (found) return found.orig;
+  for (const h of hints) {
+    const hn = normalizeColName(h);
+    const f = norm.find(c => c.norm.includes(hn) || (hn.length > 3 && hn.includes(c.norm)));
+    if (f) return f.orig;
   }
   return '';
 }
 
 // ============================================================
-// CORE LOGIC (translated from Python)
+// CORE: CLEANING & MATCHING
 // ============================================================
 function cleanPhoneNumber(phone) {
   if (phone == null) return '';
-  const s = String(phone).trim();
-  if (s === '' || s.toLowerCase() === 'nan') return '';
-  let digits = s.replace(/\D/g, '');
-  // Normalize US numbers: drop leading "1" country code if it gives an 11-digit number
-  // so "+1 555 123 4567" matches "(555) 123-4567"
-  if (digits.length === 11 && digits.startsWith('1')) {
-    digits = digits.substring(1);
-  }
+  let digits = String(phone).replace(/\D/g, '');
+  if (digits.length === 11 && digits.startsWith('1')) digits = digits.substring(1);
   return digits;
 }
-
 function cleanField(value) {
   if (value == null) return '';
-  return String(value)
-    .trim()
-    .replace(/\s/g, '')
-    .replace(/\./g, '')
-    .replace(/-/g, '')
-    .toLowerCase();
+  return String(value).trim().replace(/\s/g, '').replace(/\./g, '').replace(/-/g, '').toLowerCase();
 }
-
 function splitSpouseNames(firstName, lastName) {
   const fn = String(firstName || '').trim();
   const ln = String(lastName || '').trim();
   let firstNames;
-  if (fn.includes('&')) {
-    firstNames = fn.split('&').map(n => n.trim()).filter(Boolean);
-  } else if (/ and /i.test(fn)) {
-    firstNames = fn.split(/ and /i).map(n => n.trim()).filter(Boolean);
-  } else {
-    firstNames = [fn];
-  }
+  if (fn.includes('&')) firstNames = fn.split('&').map(n => n.trim()).filter(Boolean);
+  else if (/ and /i.test(fn)) firstNames = fn.split(/ and /i).map(n => n.trim()).filter(Boolean);
+  else firstNames = [fn];
   return firstNames.map(n => [n, ln]);
 }
-
 function getAllNameVariants(firstName, lastName) {
   const variants = new Set();
-  const combined = String(firstName || '') + String(lastName || '');
-  variants.add(cleanField(combined));
+  variants.add(cleanField(String(firstName || '') + String(lastName || '')));
   for (const [fn, ln] of splitSpouseNames(firstName, lastName)) {
     variants.add(cleanField(fn + ln));
   }
-  variants.delete(''); // drop empties
+  variants.delete('');
   return variants;
 }
-
-function findCompletelyUnmatched(lastYearRows, thisYearRows, m) {
-  const thisYearEmails = new Set();
-  const thisYearPhones = new Set();
-  const thisYearNameVariants = new Set();
-
-  for (const row of thisYearRows) {
-    const email = cleanField(row[m.email]);
-    if (email) thisYearEmails.add(email);
-    const phone = cleanPhoneNumber(row[m.phone]);
-    if (phone) thisYearPhones.add(phone);
-    const variants = getAllNameVariants(row[m.firstName], row[m.lastName]);
-    variants.forEach(v => thisYearNameVariants.add(v));
-  }
-
-  const unmatched = [];
-  for (const row of lastYearRows) {
-    const emailClean = cleanField(row[m.email]);
-    const phoneClean = cleanPhoneNumber(row[m.phone]);
-    const nameVariants = getAllNameVariants(row[m.firstName], row[m.lastName]);
-
-    const emailMatch = emailClean && thisYearEmails.has(emailClean);
-    const phoneMatch = phoneClean && thisYearPhones.has(phoneClean);
-    const nameMatch = [...nameVariants].some(v => thisYearNameVariants.has(v));
-
-    if (!emailMatch && !phoneMatch && !nameMatch) {
-      unmatched.push(row);
-    }
-  }
-  return unmatched;
-}
-
 function parseAmount(v) {
   if (v == null || v === '') return 0;
   const s = String(v).replace(/[^0-9.\-]/g, '');
   const n = parseFloat(s);
   return isNaN(n) ? 0 : n;
+}
+function parseDateField(v) {
+  if (v == null || v === '') return null;
+  // Excel serial number?
+  if (typeof v === 'number' && v > 25569 && v < 60000) {
+    // Excel epoch is 1899-12-30 in days
+    const ms = (v - 25569) * 86400 * 1000;
+    return new Date(ms);
+  }
+  const s = String(v).trim();
+  if (!s) return null;
+  // Try direct parse
+  let d = new Date(s);
+  if (!isNaN(d.getTime())) return d;
+  // Try M/D/YY HH:MM format
+  const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})(?:\s+(\d{1,2}):(\d{2}))?/);
+  if (m) {
+    let yr = parseInt(m[3]);
+    if (yr < 100) yr += yr < 50 ? 2000 : 1900;
+    const date = new Date(yr, parseInt(m[1]) - 1, parseInt(m[2]),
+                          m[4] ? parseInt(m[4]) : 0, m[5] ? parseInt(m[5]) : 0);
+    if (!isNaN(date.getTime())) return date;
+  }
+  return null;
+}
+
+// Aggregate rows into per-donor records (by best-effort identity)
+function aggregateDonors(rows, m) {
+  const map = new Map();
+  for (const r of rows) {
+    // Build a key from the first available identifier
+    const email = cleanField(r[m.email]);
+    const phone = cleanPhoneNumber(r[m.phone]);
+    const variants = [...getAllNameVariants(r[m.firstName], r[m.lastName])];
+    let key = email || phone || variants[0] || JSON.stringify(r);
+    if (!map.has(key)) {
+      map.set(key, {
+        firstName: r[m.firstName] || '',
+        lastName: r[m.lastName] || '',
+        email: r[m.email] || '',
+        phone: r[m.phone] || '',
+        runner: m.runner ? (r[m.runner] || '') : '',
+        city: m.city ? (r[m.city] || '') : '',
+        state: m.stateCol ? (r[m.stateCol] || '') : '',
+        zip: m.zip ? (r[m.zip] || '') : '',
+        total: 0, count: 0, gifts: []
+      });
+    }
+    const rec = map.get(key);
+    const amt = parseAmount(r[m.amount]);
+    rec.total += amt;
+    rec.count += 1;
+    rec.gifts.push(amt);
+  }
+  return [...map.values()];
+}
+
+function findCompletelyUnmatched(lastYearRows, thisYearRows, m) {
+  const tEmails = new Set(), tPhones = new Set(), tNames = new Set();
+  for (const r of thisYearRows) {
+    const e = cleanField(r[m.email]); if (e) tEmails.add(e);
+    const p = cleanPhoneNumber(r[m.phone]); if (p) tPhones.add(p);
+    getAllNameVariants(r[m.firstName], r[m.lastName]).forEach(v => tNames.add(v));
+  }
+  const unmatched = [];
+  for (const r of lastYearRows) {
+    const e = cleanField(r[m.email]);
+    const p = cleanPhoneNumber(r[m.phone]);
+    const vs = getAllNameVariants(r[m.firstName], r[m.lastName]);
+    const eM = e && tEmails.has(e);
+    const pM = p && tPhones.has(p);
+    const nM = [...vs].some(v => tNames.has(v));
+    if (!eM && !pM && !nM) unmatched.push(r);
+  }
+  return unmatched;
+}
+
+// Find donors who gave both years; compute delta (last_total - this_total)
+function findDowngraded(lastYearRows, thisYearRows, m) {
+  const lastDonors = aggregateDonors(lastYearRows, m);
+  const thisDonors = aggregateDonors(thisYearRows, m);
+
+  // Build lookup tables for this-year donors by email/phone/name
+  const tByEmail = new Map(), tByPhone = new Map(), tByName = new Map();
+  for (const td of thisDonors) {
+    const e = cleanField(td.email); if (e) tByEmail.set(e, td);
+    const p = cleanPhoneNumber(td.phone); if (p) tByPhone.set(p, td);
+    getAllNameVariants(td.firstName, td.lastName).forEach(v => tByName.set(v, td));
+  }
+
+  const downgraded = [];
+  for (const ld of lastDonors) {
+    const e = cleanField(ld.email);
+    const p = cleanPhoneNumber(ld.phone);
+    let match = (e && tByEmail.get(e)) || (p && tByPhone.get(p)) || null;
+    if (!match) {
+      for (const v of getAllNameVariants(ld.firstName, ld.lastName)) {
+        if (tByName.has(v)) { match = tByName.get(v); break; }
+      }
+    }
+    if (match) {
+      const delta = ld.total - match.total;
+      downgraded.push({
+        firstName: ld.firstName, lastName: ld.lastName,
+        email: ld.email || match.email,
+        phone: ld.phone || match.phone,
+        lastTotal: ld.total, thisTotal: match.total,
+        delta: delta,
+        pctChange: ld.total > 0 ? -((delta / ld.total) * 100) : 0  // negative = decrease
+      });
+    }
+  }
+  return downgraded;
 }
 
 // ============================================================
@@ -803,7 +1098,7 @@ function parseFile(file) {
     reader.onload = (e) => {
       try {
         const data = new Uint8Array(e.target.result);
-        const wb = XLSX.read(data, { type: 'array' });
+        const wb = XLSX.read(data, { type: 'array', cellDates: true });
         const firstSheet = wb.SheetNames[0];
         const rows = XLSX.utils.sheet_to_json(wb.Sheets[firstSheet], { defval: '' });
         if (!rows.length) return reject(new Error('That file looks empty.'));
@@ -819,333 +1114,1279 @@ function parseFile(file) {
 }
 
 // ============================================================
-// UI
+// FORMATTERS
 // ============================================================
-const $ = (id) => document.getElementById(id);
+const fmtMoney = (n) => '$' + Math.round(Number(n) || 0).toLocaleString();
+const fmtMoney2 = (n) => '$' + (Number(n) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmtNum = (n) => Math.round(Number(n) || 0).toLocaleString();
+const fmtPct = (n) => (Number(n) || 0).toFixed(1) + '%';
+function escapeHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// ============================================================
+// UPLOAD UI
+// ============================================================
 const dropZones = document.querySelectorAll('.drop-zone');
-
-function showStep(n) {
-  ['step-1', 'step-2', 'step-3'].forEach((id, i) => {
-    $(id).classList.toggle('hidden', (i + 1) !== n);
-  });
-  document.querySelectorAll('.step-pill').forEach(p => {
-    const s = parseInt(p.dataset.step);
-    p.classList.remove('active', 'done');
-    if (s === n) p.classList.add('active');
-    else if (s < n) p.classList.add('done');
-  });
-  window.scrollTo({ top: 0, behavior: 'smooth' });
-}
-
-function showError(elId, msg) {
-  const el = $(elId);
-  el.textContent = msg;
-  el.classList.remove('hidden');
-}
-function hideError(elId) { $(elId).classList.add('hidden'); }
-
-// Drag/drop & click upload
 dropZones.forEach(zone => {
   const input = zone.querySelector('input[type="file"]');
-  const target = input.dataset.target; // 'last' or 'this'
-
-  zone.addEventListener('dragover', (e) => { e.preventDefault(); zone.classList.add('dragging'); });
+  const target = input.dataset.target;
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragging'); });
   zone.addEventListener('dragleave', () => zone.classList.remove('dragging'));
-  zone.addEventListener('drop', (e) => {
-    e.preventDefault();
-    zone.classList.remove('dragging');
-    const file = e.dataTransfer.files[0];
-    if (file) handleFile(file, target, zone);
+  zone.addEventListener('drop', e => {
+    e.preventDefault(); zone.classList.remove('dragging');
+    if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0], target, zone);
   });
-  input.addEventListener('change', (e) => {
-    const file = e.target.files[0];
-    if (file) handleFile(file, target, zone);
+  input.addEventListener('change', e => {
+    if (e.target.files[0]) handleFile(e.target.files[0], target, zone);
   });
-
-  // clear button
-  zone.querySelector('.file-clear').addEventListener('click', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
+  zone.querySelector('.file-clear').addEventListener('click', e => {
+    e.preventDefault(); e.stopPropagation();
     if (target === 'last') { state.lastFile = null; state.lastData = null; state.lastColumns = []; }
     else { state.thisFile = null; state.thisData = null; state.thisColumns = []; }
     zone.classList.remove('has-file');
     input.value = '';
-    updateContinueButton();
+    refreshMappingUI();
   });
 });
 
 async function handleFile(file, target, zone) {
-  hideError('uploadError');
+  document.getElementById('uploadError').classList.add('hidden');
   try {
     const { rows, columns } = await parseFile(file);
     if (target === 'last') {
-      state.lastFile = file;
-      state.lastData = rows;
-      state.lastColumns = columns;
+      state.lastFile = file; state.lastData = rows; state.lastColumns = columns;
     } else {
-      state.thisFile = file;
-      state.thisData = rows;
-      state.thisColumns = columns;
+      state.thisFile = file; state.thisData = rows; state.thisColumns = columns;
     }
     zone.classList.add('has-file');
     zone.querySelector('.file-name').textContent = file.name;
-    zone.querySelector('.file-stats').textContent =
-      `${rows.length.toLocaleString()} rows · ${columns.length} columns`;
-    updateContinueButton();
+    zone.querySelector('.file-stats').textContent = `${rows.length.toLocaleString()} rows · ${columns.length} columns`;
+    refreshMappingUI();
   } catch (err) {
-    showError('uploadError', err.message);
+    const errEl = document.getElementById('uploadError');
+    errEl.textContent = err.message;
+    errEl.classList.remove('hidden');
   }
 }
 
-function updateContinueButton() {
-  $('goToStep2').disabled = !(state.lastFile && state.thisFile);
-}
+function refreshMappingUI() {
+  const card = document.getElementById('mappingCard');
+  if (!state.thisData) { card.style.display = 'none'; return; }
+  card.style.display = '';
 
-// ============================================================
-// STEP 2: MAPPING
-// ============================================================
-$('goToStep2').addEventListener('click', () => {
-  // Build column union (prefer columns that exist in BOTH files)
-  const allCols = Array.from(new Set([...state.lastColumns, ...state.thisColumns]));
+  const allCols = Array.from(new Set([
+    ...(state.thisColumns || []),
+    ...(state.lastColumns || [])
+  ]));
 
-  // auto-detect
-  state.mapping.firstName = autoDetectColumn(allCols, FIELD_HINTS.firstName);
-  state.mapping.lastName = autoDetectColumn(allCols, FIELD_HINTS.lastName);
-  state.mapping.email = autoDetectColumn(allCols, FIELD_HINTS.email);
-  state.mapping.phone = autoDetectColumn(allCols, FIELD_HINTS.phone);
-  state.mapping.amount = autoDetectColumn(allCols, FIELD_HINTS.amount);
-  state.mapping.runner = autoDetectColumn(allCols, FIELD_HINTS.runner);
+  // Auto-detect (only fill blanks; don't override user choices)
+  const autoFill = (key) => {
+    if (!state.mapping[key]) state.mapping[key] = autoDetectColumn(allCols, FIELD_HINTS[key]);
+  };
+  Object.keys(FIELD_HINTS).forEach(autoFill);
 
-  renderMappingUI(allCols);
-  showStep(2);
-});
-
-function renderMappingUI(allCols) {
   const fields = [
     { key: 'firstName', label: 'First Name', hint: 'e.g. "John" or "Dave & Jane"', required: true },
     { key: 'lastName', label: 'Last Name', hint: 'e.g. "Smith"', required: true },
-    { key: 'email', label: 'Email', hint: 'Used to match across years', required: true },
+    { key: 'email', label: 'Email', hint: 'Used to match donors', required: true },
     { key: 'phone', label: 'Phone', hint: 'Any format works', required: true },
     { key: 'amount', label: 'Donation Amount', hint: 'Numbers — currency symbols are fine', required: true },
-    { key: 'runner', label: 'Runner / Team (optional)', hint: 'Optional — name this whatever you like', required: false }
+    { key: 'date', label: 'Date / Timestamp', hint: 'For time-of-day & trend analysis', required: false },
+    { key: 'city', label: 'City', hint: 'For geography page', required: false },
+    { key: 'stateCol', label: 'State', hint: 'Two-letter codes work best (e.g. IL)', required: false },
+    { key: 'zip', label: 'Zip / Postal Code', hint: 'Optional', required: false },
+    { key: 'runner', label: 'Runner / Team', hint: 'For runner leaderboards', required: false }
   ];
 
-  const grid = $('mappingGrid');
+  const grid = document.getElementById('mappingGrid');
   grid.innerHTML = '';
-
   fields.forEach(f => {
     const detected = state.mapping[f.key];
-    let tagHTML;
+    let tag;
     if (f.required) {
-      tagHTML = detected
-        ? '<span class="auto-tag detected">auto-detected</span>'
-        : '<span class="auto-tag missing">needs selection</span>';
+      tag = detected ? '<span class="auto-tag detected">auto-detected</span>'
+                     : '<span class="auto-tag missing">needs selection</span>';
     } else {
-      tagHTML = detected
-        ? '<span class="auto-tag detected">auto-detected</span>'
-        : '<span class="auto-tag optional">optional</span>';
+      tag = detected ? '<span class="auto-tag detected">auto-detected</span>'
+                     : '<span class="auto-tag optional">optional</span>';
     }
-
-    let labelExtra = '';
-    if (f.key === 'runner') {
-      // allow custom label
-      labelExtra = `
-        <input type="text" class="runner-label-input" placeholder="Field label (default: RunnerName)"
-               value="${state.runnerLabel}" style="margin-top:6px; font-size:12px; padding:6px 10px;">
-      `;
-    }
-
     const row = document.createElement('div');
     row.className = 'map-row';
     row.innerHTML = `
-      <div class="map-label">
+      <div>
         <div class="map-label-name">${f.label}</div>
         <div class="map-label-hint">${f.hint}</div>
-        ${labelExtra}
       </div>
       <select data-field="${f.key}">
         <option value="">${f.required ? '— select column —' : '— none —'}</option>
-        ${allCols.map(c => `<option value="${c}" ${c === detected ? 'selected' : ''}>${c}</option>`).join('')}
+        ${allCols.map(c => `<option value="${escapeHtml(c)}" ${c === detected ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('')}
       </select>
-      ${tagHTML}
+      ${tag}
     `;
     grid.appendChild(row);
   });
-
-  // wire up
   grid.querySelectorAll('select').forEach(sel => {
-    sel.addEventListener('change', (e) => {
-      state.mapping[e.target.dataset.field] = e.target.value;
-    });
+    sel.addEventListener('change', e => { state.mapping[e.target.dataset.field] = e.target.value; });
   });
-  const labelInput = grid.querySelector('.runner-label-input');
-  if (labelInput) {
-    labelInput.addEventListener('input', (e) => {
-      state.runnerLabel = e.target.value.trim() || 'RunnerName';
-    });
-  }
 }
 
-$('backToStep1').addEventListener('click', () => showStep(1));
-$('backToStep2').addEventListener('click', () => showStep(2));
-
 // ============================================================
-// STEP 3: RUN ANALYSIS
+// BUILD DASHBOARD
 // ============================================================
-$('runAnalysis').addEventListener('click', () => {
-  hideError('mapError');
+document.getElementById('runAnalysis').addEventListener('click', () => {
+  const errEl = document.getElementById('mapError');
+  errEl.classList.add('hidden');
   const m = state.mapping;
   const required = ['firstName', 'lastName', 'email', 'phone', 'amount'];
   const missing = required.filter(k => !m[k]);
   if (missing.length) {
-    const names = { firstName: 'First Name', lastName: 'Last Name', email: 'Email', phone: 'Phone', amount: 'Amount' };
-    showError('mapError', `Please pick a column for: ${missing.map(k => names[k]).join(', ')}`);
+    const labels = { firstName: 'First Name', lastName: 'Last Name', email: 'Email', phone: 'Phone', amount: 'Amount' };
+    errEl.textContent = `Please pick a column for: ${missing.map(k => labels[k]).join(', ')}`;
+    errEl.classList.remove('hidden');
     return;
   }
-  // Validate each column exists in both files
-  const checkCol = (col) => state.lastColumns.includes(col) && state.thisColumns.includes(col);
+  // Validate columns exist in this-year file
   for (const k of required) {
-    if (!checkCol(m[k])) {
-      showError('mapError', `Column "${m[k]}" doesn't exist in both files. Make sure both files have this column.`);
+    if (!state.thisColumns.includes(m[k])) {
+      errEl.textContent = `Column "${m[k]}" doesn't exist in your current period file.`;
+      errEl.classList.remove('hidden');
+      return;
+    }
+  }
+  buildAllPages();
+  state.built = true;
+  goToPage('overview');
+});
+
+function buildAllPages() {
+  buildOverview();
+  buildLapsed();
+  buildGeography();
+  buildTimeOfDay();
+  buildRunners();
+}
+
+// ============================================================
+// PAGE: OVERVIEW
+// ============================================================
+function buildOverview() {
+  const m = state.mapping;
+  const rows = state.thisData;
+  const amounts = rows.map(r => parseAmount(r[m.amount])).filter(a => a > 0);
+  const total = amounts.reduce((s, a) => s + a, 0);
+  const donorMap = aggregateDonors(rows, m);
+
+  const sorted = [...amounts].sort((a, b) => a - b);
+  const median = quantile(sorted, 0.5);
+  const q1 = quantile(sorted, 0.25);
+  const q3 = quantile(sorted, 0.75);
+  const mean = amounts.length ? total / amounts.length : 0;
+  const iqr = q3 - q1;
+
+  // Update meta
+  const metaParts = [`${rows.length.toLocaleString()} rows`, `${donorMap.length.toLocaleString()} unique donors`];
+  if (m.date) {
+    const dates = rows.map(r => parseDateField(r[m.date])).filter(Boolean);
+    if (dates.length) {
+      dates.sort((a, b) => a - b);
+      const fmt = d => d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+      metaParts.push(`${fmt(dates[0])} – ${fmt(dates[dates.length - 1])}`);
+    }
+  }
+  document.getElementById('overviewMeta').innerHTML = metaParts.map(p => `<span>${p}</span>`).join('');
+
+  let html = `
+    <div class="kpi-grid">
+      <div class="kpi highlight">
+        <div class="kpi-label">Total raised</div>
+        <div class="kpi-value">${fmtMoney(total)}</div>
+        <div class="kpi-sub">across ${amounts.length.toLocaleString()} donations</div>
+      </div>
+      <div class="kpi accent">
+        <div class="kpi-label">Unique donors</div>
+        <div class="kpi-value">${fmtNum(donorMap.length)}</div>
+        <div class="kpi-sub">avg ${fmtMoney(donorMap.length ? total / donorMap.length : 0)} / donor</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Median gift</div>
+        <div class="kpi-value">${fmtMoney(median)}</div>
+        <div class="kpi-sub">half are above, half below</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Mean gift</div>
+        <div class="kpi-value">${fmtMoney(mean)}</div>
+        <div class="kpi-sub">simple average</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">IQR (middle 50%)</div>
+        <div class="kpi-value" style="font-size: 24px;">${fmtMoney(q1)} – ${fmtMoney(q3)}</div>
+        <div class="kpi-sub">spread: ${fmtMoney(iqr)}</div>
+      </div>
+    </div>
+
+    <div class="chart-row">
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Donations over time</div>
+            <div class="card-sub" id="trendSub">Daily donor count and total raised</div>
+          </div>
+        </div>
+        <div class="chart-wrap tall"><canvas id="chartTrend"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Gift size distribution</div>
+            <div class="card-sub">How donation amounts cluster</div>
+          </div>
+        </div>
+        <div class="chart-wrap tall"><canvas id="chartHisto"></canvas></div>
+      </div>
+    </div>
+  `;
+  document.getElementById('overview-content').innerHTML = html;
+
+  // Time series
+  if (m.date) {
+    const dailyMap = new Map(); // date string -> {count, amount}
+    rows.forEach(r => {
+      const d = parseDateField(r[m.date]);
+      if (!d) return;
+      const key = d.toISOString().slice(0, 10);
+      if (!dailyMap.has(key)) dailyMap.set(key, { count: 0, amount: 0, date: d });
+      const e = dailyMap.get(key);
+      e.count += 1;
+      e.amount += parseAmount(r[m.amount]);
+    });
+    const series = [...dailyMap.values()].sort((a, b) => a.date - b.date);
+    if (series.length) {
+      destroyChart('chartTrend');
+      const ctx = document.getElementById('chartTrend').getContext('2d');
+      state.charts.chartTrend = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: series.map(p => p.date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })),
+          datasets: [
+            {
+              label: 'Donors',
+              data: series.map(p => p.count),
+              borderColor: '#2F5D3E',
+              backgroundColor: 'rgba(47, 93, 62, 0.12)',
+              fill: true, tension: 0.3, yAxisID: 'y',
+              pointRadius: series.length > 60 ? 0 : 2,
+              borderWidth: 2
+            },
+            {
+              label: 'Amount ($)',
+              data: series.map(p => p.amount),
+              borderColor: '#B85C2C',
+              backgroundColor: 'transparent',
+              fill: false, tension: 0.3, yAxisID: 'y1',
+              pointRadius: series.length > 60 ? 0 : 2,
+              borderWidth: 2, borderDash: [4, 3]
+            }
+          ]
+        },
+        options: chartBaseOptions({
+          scales: {
+            x: chartAxisStyle(),
+            y: { ...chartAxisStyle(), position: 'left', title: { display: true, text: 'Donors', font: { family: 'JetBrains Mono', size: 10 }, color: '#8A7E6E' } },
+            y1: { ...chartAxisStyle(), position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: 'Amount ($)', font: { family: 'JetBrains Mono', size: 10 }, color: '#8A7E6E' } }
+          }
+        })
+      });
+    } else {
+      noDateChart('chartTrend');
+    }
+  } else {
+    noDateChart('chartTrend');
+  }
+
+  // Histogram - 6 smart bins
+  buildHistogram(amounts);
+}
+
+function buildHistogram(amounts) {
+  destroyChart('chartHisto');
+  if (!amounts.length) return;
+  const max = Math.max(...amounts);
+  const min = Math.min(...amounts);
+  // Smart bin edges: prefer round numbers
+  const edges = niceBins(min, max, 6);
+  const counts = new Array(edges.length - 1).fill(0);
+  for (const a of amounts) {
+    let idx = edges.length - 2;
+    for (let i = 0; i < edges.length - 1; i++) {
+      if (a >= edges[i] && a < edges[i + 1]) { idx = i; break; }
+      if (i === edges.length - 2 && a >= edges[i]) idx = i;
+    }
+    counts[idx] += 1;
+  }
+  const labels = [];
+  for (let i = 0; i < edges.length - 1; i++) {
+    const lo = edges[i], hi = edges[i + 1];
+    if (i === edges.length - 2) labels.push(`${fmtMoneyShort(lo)}+`);
+    else labels.push(`${fmtMoneyShort(lo)}–${fmtMoneyShort(hi)}`);
+  }
+  const ctx = document.getElementById('chartHisto').getContext('2d');
+  state.charts.chartHisto = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Donations',
+        data: counts,
+        backgroundColor: '#2F5D3E',
+        borderRadius: 4,
+        borderSkipped: false
+      }]
+    },
+    options: chartBaseOptions({
+      plugins: { legend: { display: false } },
+      scales: { x: chartAxisStyle(), y: chartAxisStyle() }
+    })
+  });
+}
+
+function niceBins(min, max, n) {
+  if (max <= min) return [min, min + 1];
+  const range = max - min;
+  const rough = range / n;
+  const mag = Math.pow(10, Math.floor(Math.log10(rough)));
+  const norm = rough / mag;
+  let step;
+  if (norm < 1.5) step = 1 * mag;
+  else if (norm < 3) step = 2 * mag;
+  else if (norm < 7) step = 5 * mag;
+  else step = 10 * mag;
+  const start = Math.floor(min / step) * step;
+  const edges = [start];
+  for (let i = 1; i <= n; i++) edges.push(start + i * step);
+  return edges;
+}
+function fmtMoneyShort(n) {
+  if (n >= 1000) return '$' + (n / 1000).toFixed(n % 1000 === 0 ? 0 : 1) + 'k';
+  return '$' + Math.round(n);
+}
+function quantile(sorted, q) {
+  if (!sorted.length) return 0;
+  const pos = (sorted.length - 1) * q;
+  const base = Math.floor(pos);
+  const rest = pos - base;
+  if (sorted[base + 1] !== undefined) return sorted[base] + rest * (sorted[base + 1] - sorted[base]);
+  return sorted[base];
+}
+
+function noDateChart(canvasId) {
+  destroyChart(canvasId);
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  // Show empty placeholder
+  const wrap = canvas.parentElement;
+  wrap.innerHTML = `<div class="empty" style="padding: 30px;">
+    <div class="empty-icon">⌛</div>
+    <div class="empty-title">Time data not available</div>
+    <div class="empty-sub">Map a date column on the upload page to see trends over time.</div>
+  </div>`;
+}
+
+function chartBaseOptions(extra = {}) {
+  const base = {
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: { mode: 'index', intersect: false },
+    plugins: {
+      legend: {
+        position: 'top', align: 'end',
+        labels: { font: { family: 'Inter', size: 12 }, color: '#4A4035', boxWidth: 10, boxHeight: 10, padding: 14 }
+      },
+      tooltip: {
+        backgroundColor: '#1F1A14', padding: 10, cornerRadius: 8,
+        titleFont: { family: 'Inter', weight: '600' },
+        bodyFont: { family: 'Inter' }
+      }
+    }
+  };
+  // shallow merge with overrides for plugins/scales
+  return { ...base, ...extra,
+    plugins: { ...base.plugins, ...(extra.plugins || {}) }
+  };
+}
+function chartAxisStyle() {
+  return {
+    grid: { color: '#E5DDCC', drawTicks: false },
+    ticks: { color: '#8A7E6E', font: { family: 'JetBrains Mono', size: 10 }, padding: 6 },
+    border: { display: false }
+  };
+}
+function destroyChart(id) {
+  if (state.charts[id]) { state.charts[id].destroy(); delete state.charts[id]; }
+}
+
+// ============================================================
+// PAGE: LAPSED
+// ============================================================
+function buildLapsed() {
+  const m = state.mapping;
+  const container = document.getElementById('lapsed-content');
+
+  if (!state.lastData) {
+    container.innerHTML = `
+      <div class="card empty">
+        <div class="empty-icon">↺</div>
+        <div class="empty-title">Add a comparison file</div>
+        <div class="empty-sub">Upload last year's donor data on the Upload page to find lapsed donors and downgrades.</div>
+        <div style="margin-top: 18px;">
+          <button class="btn btn-ghost" onclick="goToPage('upload')">→ Go to upload</button>
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  // Validate required cols are in last year too
+  for (const k of ['firstName', 'lastName', 'email', 'phone', 'amount']) {
+    if (!state.lastColumns.includes(m[k])) {
+      container.innerHTML = `
+        <div class="card error-box">Column "${escapeHtml(m[k])}" isn't in last year's file. Make sure both files have the same column names.</div>
+      `;
       return;
     }
   }
 
-  try {
-    const unmatched = findCompletelyUnmatched(state.lastData, state.thisData, m);
+  const lapsed = findCompletelyUnmatched(state.lastData, state.thisData, m);
+  const lapsedTotal = lapsed.reduce((s, r) => s + parseAmount(r[m.amount]), 0);
+  const lastYearTotal = state.lastData.reduce((s, r) => s + parseAmount(r[m.amount]), 0);
 
-    // Build report rows
-    const reportRows = unmatched.map(r => {
-      const fn = String(r[m.firstName] || '').trim();
-      const ln = String(r[m.lastName] || '').trim();
-      const row = {
-        Name: `${fn} ${ln}`.trim(),
-        Email: r[m.email] || '',
-        Phone: r[m.phone] || '',
-        Amount: parseAmount(r[m.amount])
-      };
-      if (m.runner) row[state.runnerLabel] = r[m.runner] || '';
-      return row;
-    });
-    reportRows.sort((a, b) => b.Amount - a.Amount);
+  const downgraded = findDowngraded(state.lastData, state.thisData, m).filter(d => d.delta > 0);
+  downgraded.sort((a, b) => b.delta - a.delta);
+  const downgradeTotal = downgraded.reduce((s, d) => s + d.delta, 0);
 
-    // Stats
-    const totalAmount = reportRows.reduce((s, r) => s + r.Amount, 0);
-    const lastYearTotal = state.lastData.reduce((s, r) => s + parseAmount(r[m.amount]), 0);
-
-    state.results = {
-      rows: reportRows,
-      stats: {
-        lapsedCount: reportRows.length,
-        lastYearCount: state.lastData.length,
-        thisYearCount: state.thisData.length,
-        lostAmount: totalAmount,
-        lastYearTotal: lastYearTotal,
-        lostPct: lastYearTotal > 0 ? (totalAmount / lastYearTotal * 100) : 0
-      }
+  const lapsedRows = lapsed.map(r => {
+    const fn = String(r[m.firstName] || '').trim();
+    const ln = String(r[m.lastName] || '').trim();
+    return {
+      Name: `${fn} ${ln}`.trim(),
+      Email: r[m.email] || '',
+      Phone: r[m.phone] || '',
+      Amount: parseAmount(r[m.amount])
     };
+  }).sort((a, b) => b.Amount - a.Amount);
 
-    renderResults();
-    showStep(3);
-  } catch (err) {
-    showError('mapError', `Something went wrong: ${err.message}`);
-  }
-});
+  container.innerHTML = `
+    <div class="kpi-grid">
+      <div class="kpi highlight">
+        <div class="kpi-label">Lapsed donors</div>
+        <div class="kpi-value">${fmtNum(lapsed.length)}</div>
+        <div class="kpi-sub">of ${fmtNum(state.lastData.length)} last year</div>
+      </div>
+      <div class="kpi accent">
+        <div class="kpi-label">Revenue at risk</div>
+        <div class="kpi-value">${fmtMoney(lapsedTotal)}</div>
+        <div class="kpi-sub">${lastYearTotal > 0 ? fmtPct(lapsedTotal / lastYearTotal * 100) : '—'} of last year</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Downgraded donors</div>
+        <div class="kpi-value">${fmtNum(downgraded.length)}</div>
+        <div class="kpi-sub">gave less this year</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Downgrade impact</div>
+        <div class="kpi-value">${fmtMoney(downgradeTotal)}</div>
+        <div class="kpi-sub">total reduction</div>
+      </div>
+    </div>
 
-function renderResults() {
-  const { rows, stats } = state.results;
-  const fmtMoney = (n) => '$' + Math.round(n).toLocaleString();
-  const fmtNum = (n) => n.toLocaleString();
+    <div class="subtabs" id="lapsedSubtabs">
+      <button class="subtab active" data-sub="missing">Didn't return (${lapsed.length.toLocaleString()})</button>
+      <button class="subtab" data-sub="downgraded">Gave less (${downgraded.length.toLocaleString()})</button>
+    </div>
 
-  $('statsGrid').innerHTML = `
-    <div class="stat highlight">
-      <div class="stat-label">Lapsed donors</div>
-      <div class="stat-value">${fmtNum(stats.lapsedCount)}</div>
-      <div class="stat-sub">of ${fmtNum(stats.lastYearCount)} last year</div>
+    <div id="lapsed-missing" class="lapsed-pane">
+      <div class="table-wrap">
+        <div class="table-header">
+          <span>${lapsedRows.length.toLocaleString()} donors didn't return</span>
+          <button class="btn btn-ghost btn-sm" onclick="downloadLapsedCSV()">⬇ Download CSV</button>
+        </div>
+        <div class="table-scroll">
+          <table class="dt">
+            <thead><tr><th>Name</th><th>Email</th><th>Phone</th><th class="num">Last year</th></tr></thead>
+            <tbody>
+              ${lapsedRows.slice(0, 200).map(r => `
+                <tr>
+                  <td>${escapeHtml(r.Name)}</td>
+                  <td>${escapeHtml(r.Email)}</td>
+                  <td>${escapeHtml(r.Phone)}</td>
+                  <td class="num">${fmtMoney(r.Amount)}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+        ${lapsedRows.length > 200 ? `<div class="table-header" style="border-top: 1px solid var(--line); border-bottom: none;">Showing first 200 — full list in CSV download</div>` : ''}
+      </div>
     </div>
-    <div class="stat highlight">
-      <div class="stat-label">Revenue at risk</div>
-      <div class="stat-value">${fmtMoney(stats.lostAmount)}</div>
-      <div class="stat-sub">${stats.lostPct.toFixed(1)}% of last year</div>
-    </div>
-    <div class="stat">
-      <div class="stat-label">Last year total</div>
-      <div class="stat-value">${fmtNum(stats.lastYearCount)}</div>
-      <div class="stat-sub">${fmtMoney(stats.lastYearTotal)} raised</div>
-    </div>
-    <div class="stat">
-      <div class="stat-label">This year so far</div>
-      <div class="stat-value">${fmtNum(stats.thisYearCount)}</div>
-      <div class="stat-sub">donors recorded</div>
+
+    <div id="lapsed-downgraded" class="lapsed-pane hidden">
+      <div class="table-wrap">
+        <div class="table-header">
+          <span>${downgraded.length.toLocaleString()} donors gave less this year</span>
+          <button class="btn btn-ghost btn-sm" onclick="downloadDowngradedCSV()">⬇ Download CSV</button>
+        </div>
+        <div class="table-scroll">
+          <table class="dt">
+            <thead><tr><th>Name</th><th>Email</th><th class="num">Last year</th><th class="num">This year</th><th class="num">Decrease</th><th class="num">% change</th></tr></thead>
+            <tbody>
+              ${downgraded.slice(0, 200).map(d => `
+                <tr>
+                  <td>${escapeHtml((d.firstName + ' ' + d.lastName).trim())}</td>
+                  <td>${escapeHtml(d.email)}</td>
+                  <td class="num">${fmtMoney(d.lastTotal)}</td>
+                  <td class="num">${fmtMoney(d.thisTotal)}</td>
+                  <td class="num delta-down">−${fmtMoney(d.delta)}</td>
+                  <td class="num delta-down">${d.pctChange.toFixed(1)}%</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+        ${downgraded.length > 200 ? `<div class="table-header" style="border-top: 1px solid var(--line); border-bottom: none;">Showing first 200 — full list in CSV download</div>` : ''}
+      </div>
     </div>
   `;
 
-  // Table
-  const cols = Object.keys(rows[0] || { Name: '', Email: '', Phone: '', Amount: 0 });
-  const thead = $('resultsTable').querySelector('thead');
-  const tbody = $('resultsTable').querySelector('tbody');
-  thead.innerHTML = '<tr>' + cols.map(c => `<th${c === 'Amount' ? ' style="text-align:right"' : ''}>${c}</th>`).join('') + '</tr>';
+  // Save data for downloads
+  state._lapsedRows = lapsedRows;
+  state._downgraded = downgraded;
 
-  const previewRows = rows.slice(0, 50);
-  tbody.innerHTML = previewRows.map(r => {
-    return '<tr>' + cols.map(c => {
-      if (c === 'Amount') return `<td class="amount">${'$' + Math.round(r[c]).toLocaleString()}</td>`;
-      return `<td>${escapeHtml(r[c] == null ? '' : String(r[c]))}</td>`;
-    }).join('') + '</tr>';
-  }).join('');
-
-  $('tablePreviewLabel').textContent = rows.length > 50
-    ? `Showing first 50 of ${rows.length.toLocaleString()} — full list in CSV download`
-    : `Showing all ${rows.length.toLocaleString()}`;
+  // Subtab switching
+  document.querySelectorAll('#lapsedSubtabs .subtab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#lapsedSubtabs .subtab').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const sub = btn.dataset.sub;
+      document.getElementById('lapsed-missing').classList.toggle('hidden', sub !== 'missing');
+      document.getElementById('lapsed-downgraded').classList.toggle('hidden', sub !== 'downgraded');
+    });
+  });
 }
 
-function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function downloadLapsedCSV() {
+  if (!state._lapsedRows || !state._lapsedRows.length) return;
+  const cols = ['Name', 'Email', 'Phone', 'Amount'];
+  const csv = [cols.join(',')].concat(state._lapsedRows.map(r => cols.map(c => csvCell(r[c])).join(','))).join('\n');
+  downloadCSV(csv, `lapsed_donors_${todayStr()}.csv`);
 }
-
-// ============================================================
-// CSV DOWNLOAD
-// ============================================================
-$('downloadCsv').addEventListener('click', () => {
-  if (!state.results) return;
-  const rows = state.results.rows;
-  if (!rows.length) { alert('No lapsed donors found — nothing to download!'); return; }
-
-  const cols = Object.keys(rows[0]);
-  const csvRows = [cols.join(',')];
-  for (const r of rows) {
-    csvRows.push(cols.map(c => csvCell(r[c])).join(','));
-  }
-  const blob = new Blob([csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  const today = new Date().toISOString().slice(0, 10);
-  a.href = url;
-  a.download = `lapsed_donors_${today}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
-});
-
+function downloadDowngradedCSV() {
+  if (!state._downgraded || !state._downgraded.length) return;
+  const cols = ['First Name', 'Last Name', 'Email', 'Phone', 'Last Year', 'This Year', 'Decrease', 'Pct Change'];
+  const rows = state._downgraded.map(d => [
+    d.firstName, d.lastName, d.email, d.phone,
+    d.lastTotal.toFixed(2), d.thisTotal.toFixed(2), d.delta.toFixed(2), d.pctChange.toFixed(2)
+  ]);
+  const csv = [cols.join(',')].concat(rows.map(r => r.map(csvCell).join(','))).join('\n');
+  downloadCSV(csv, `downgraded_donors_${todayStr()}.csv`);
+}
 function csvCell(v) {
   if (v == null) return '';
   const s = String(v);
   if (/[",\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
   return s;
 }
+function downloadCSV(content, filename) {
+  const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+function todayStr() { return new Date().toISOString().slice(0, 10); }
 
-// Start over
-$('startOver').addEventListener('click', () => {
-  if (!confirm('Start over? Your current data will be cleared.')) return;
-  state.lastFile = state.thisFile = null;
-  state.lastData = state.thisData = null;
-  state.lastColumns = state.thisColumns = [];
-  state.results = null;
-  document.querySelectorAll('.drop-zone').forEach(z => {
-    z.classList.remove('has-file');
-    z.querySelector('input').value = '';
+// ============================================================
+// US STATE DATA
+// ============================================================
+const STATE_NAMES = {
+  AL: 'Alabama', AK: 'Alaska', AZ: 'Arizona', AR: 'Arkansas', CA: 'California',
+  CO: 'Colorado', CT: 'Connecticut', DE: 'Delaware', FL: 'Florida', GA: 'Georgia',
+  HI: 'Hawaii', ID: 'Idaho', IL: 'Illinois', IN: 'Indiana', IA: 'Iowa',
+  KS: 'Kansas', KY: 'Kentucky', LA: 'Louisiana', ME: 'Maine', MD: 'Maryland',
+  MA: 'Massachusetts', MI: 'Michigan', MN: 'Minnesota', MS: 'Mississippi', MO: 'Missouri',
+  MT: 'Montana', NE: 'Nebraska', NV: 'Nevada', NH: 'New Hampshire', NJ: 'New Jersey',
+  NM: 'New Mexico', NY: 'New York', NC: 'North Carolina', ND: 'North Dakota', OH: 'Ohio',
+  OK: 'Oklahoma', OR: 'Oregon', PA: 'Pennsylvania', RI: 'Rhode Island', SC: 'South Carolina',
+  SD: 'South Dakota', TN: 'Tennessee', TX: 'Texas', UT: 'Utah', VT: 'Vermont',
+  VA: 'Virginia', WA: 'Washington', WV: 'West Virginia', WI: 'Wisconsin', WY: 'Wyoming',
+  DC: 'District of Columbia'
+};
+const STATE_NAME_TO_CODE = Object.fromEntries(Object.entries(STATE_NAMES).map(([k, v]) => [v.toLowerCase(), k]));
+const STATE_CENTROIDS = {
+  AL: [32.8, -86.8], AK: [63.6, -152.0], AZ: [34.2, -111.6], AR: [34.7, -92.4], CA: [37.0, -119.5],
+  CO: [39.0, -105.5], CT: [41.6, -72.7], DE: [38.9, -75.5], FL: [28.6, -82.5], GA: [32.7, -83.5],
+  HI: [20.6, -157.5], ID: [44.4, -114.6], IL: [40.0, -89.2], IN: [39.9, -86.3], IA: [42.0, -93.2],
+  KS: [38.5, -98.4], KY: [37.5, -85.3], LA: [31.0, -91.8], ME: [45.4, -69.2], MD: [39.0, -76.8],
+  MA: [42.3, -71.8], MI: [44.3, -85.4], MN: [46.3, -94.3], MS: [32.7, -89.6], MO: [38.4, -92.4],
+  MT: [47.0, -109.6], NE: [41.5, -99.8], NV: [38.5, -117.0], NH: [43.7, -71.6], NJ: [40.2, -74.5],
+  NM: [34.4, -106.1], NY: [42.9, -75.5], NC: [35.6, -79.4], ND: [47.4, -100.4], OH: [40.3, -82.8],
+  OK: [35.5, -97.5], OR: [44.0, -120.5], PA: [40.9, -77.8], RI: [41.7, -71.5], SC: [33.8, -80.9],
+  SD: [44.4, -100.2], TN: [35.7, -86.7], TX: [31.0, -98.5], UT: [39.3, -111.7], VT: [44.0, -72.7],
+  VA: [37.8, -78.2], WA: [47.4, -121.5], WV: [38.6, -80.6], WI: [44.6, -89.6], WY: [43.0, -107.5],
+  DC: [38.9, -77.0]
+};
+
+function normalizeStateValue(v) {
+  if (!v) return '';
+  const s = String(v).trim();
+  if (s.length === 2) return s.toUpperCase();
+  const code = STATE_NAME_TO_CODE[s.toLowerCase()];
+  return code || s.toUpperCase();
+}
+
+// ============================================================
+// PAGE: GEOGRAPHY
+// ============================================================
+function buildGeography() {
+  const m = state.mapping;
+  const container = document.getElementById('geography-content');
+
+  if (!m.stateCol) {
+    container.innerHTML = `
+      <div class="card empty">
+        <div class="empty-icon">◉</div>
+        <div class="empty-title">No state data mapped</div>
+        <div class="empty-sub">Map a State column on the Upload page to see geographic patterns. (City and Zip are also nice-to-have.)</div>
+        <div style="margin-top: 18px;">
+          <button class="btn btn-ghost" onclick="goToPage('upload')">→ Go to upload</button>
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  // Aggregate by state
+  const stateAgg = new Map();
+  state.thisData.forEach(r => {
+    const code = normalizeStateValue(r[m.stateCol]);
+    if (!code || !STATE_NAMES[code]) return;
+    const amt = parseAmount(r[m.amount]);
+    if (!stateAgg.has(code)) stateAgg.set(code, { total: 0, count: 0, cities: new Map() });
+    const s = stateAgg.get(code);
+    s.total += amt;
+    s.count += 1;
+    if (m.city) {
+      const city = String(r[m.city] || '').trim();
+      if (city) {
+        if (!s.cities.has(city)) s.cities.set(city, { total: 0, count: 0 });
+        const c = s.cities.get(city);
+        c.total += amt;
+        c.count += 1;
+      }
+    }
   });
-  updateContinueButton();
-  showStep(1);
+
+  const stateRows = [...stateAgg.entries()].map(([code, d]) => ({
+    code, name: STATE_NAMES[code], total: d.total, count: d.count,
+    avg: d.count ? d.total / d.count : 0,
+    topCities: [...d.cities.entries()]
+      .map(([city, dd]) => ({ city, ...dd }))
+      .sort((a, b) => b.total - a.total).slice(0, 5)
+  }));
+  stateRows.sort((a, b) => b.total - a.total);
+
+  const grandTotal = stateRows.reduce((s, r) => s + r.total, 0);
+  const totalStates = stateRows.length;
+  const top3 = stateRows.slice(0, 3);
+
+  container.innerHTML = `
+    <div class="kpi-grid">
+      <div class="kpi accent">
+        <div class="kpi-label">States with donors</div>
+        <div class="kpi-value">${fmtNum(totalStates)}</div>
+        <div class="kpi-sub">geographic reach</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Top state</div>
+        <div class="kpi-value" style="font-size: 24px;">${top3[0]?.name || '—'}</div>
+        <div class="kpi-sub">${top3[0] ? fmtMoney(top3[0].total) + ' raised' : ''}</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Top 3 share</div>
+        <div class="kpi-value">${grandTotal > 0 ? fmtPct(top3.reduce((s, r) => s + r.total, 0) / grandTotal * 100) : '—'}</div>
+        <div class="kpi-sub">of total raised</div>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Choropleth — total raised by state</div>
+            <div class="card-sub">Darker = more raised</div>
+          </div>
+        </div>
+        <div id="choroplethMap"></div>
+        <div class="map-legend" id="choroLegend"></div>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Hot zones</div>
+            <div class="card-sub">Click any bubble for state details</div>
+          </div>
+        </div>
+        <div id="markerMap"></div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top: 18px;">
+      <div class="card-header">
+        <div>
+          <div class="card-title">Top states</div>
+          <div class="card-sub">Sorted by total raised</div>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <div class="table-scroll" style="max-height: 400px;">
+          <table class="dt">
+            <thead><tr><th>#</th><th>State</th><th class="num">Donors</th><th class="num">Total</th><th class="num">Avg gift</th><th>Top city</th></tr></thead>
+            <tbody>
+              ${stateRows.map((r, i) => `
+                <tr>
+                  <td><span class="rank-num ${i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : ''}">${i + 1}</span></td>
+                  <td><strong>${escapeHtml(r.name)}</strong> <span style="color: var(--ink-muted); font-family: 'JetBrains Mono', monospace; font-size: 11px;">${r.code}</span></td>
+                  <td class="num">${fmtNum(r.count)}</td>
+                  <td class="num">${fmtMoney(r.total)}</td>
+                  <td class="num">${fmtMoney(r.avg)}</td>
+                  <td>${r.topCities[0] ? escapeHtml(r.topCities[0].city) + ' <span style="color:var(--ink-muted)">(' + fmtMoney(r.topCities[0].total) + ')</span>' : '—'}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // Render maps after DOM is in
+  setTimeout(() => renderMaps(stateAgg, stateRows), 50);
+}
+
+function renderMaps(stateAgg, stateRows) {
+  // Cleanup existing
+  if (state.maps.choro) { state.maps.choro.remove(); state.maps.choro = null; }
+  if (state.maps.markers) { state.maps.markers.remove(); state.maps.markers = null; }
+
+  const totals = stateRows.map(r => r.total);
+  const maxTotal = totals.length ? Math.max(...totals) : 1;
+
+  // -------------- CHOROPLETH --------------
+  const choroEl = document.getElementById('choroplethMap');
+  if (!choroEl) return;
+  const choro = L.map('choroplethMap', { zoomControl: true, attributionControl: false }).setView([39.5, -98], 3.5);
+  state.maps.choro = choro;
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png', {
+    maxZoom: 18, subdomains: 'abcd'
+  }).addTo(choro);
+
+  function colorFor(value) {
+    if (!value) return 'rgba(217, 207, 190, 0.3)';
+    const t = Math.sqrt(value / maxTotal); // sqrt for better visual scale
+    // gradient from cream → sage
+    const r = Math.round(245 - (245 - 47) * t);
+    const g = Math.round(239 - (239 - 93) * t);
+    const b = Math.round(230 - (230 - 62) * t);
+    return `rgb(${r}, ${g}, ${b})`;
+  }
+
+  // Try multiple GeoJSON sources for resilience. We match by state name (in properties),
+  // which works regardless of whether the source uses two-letter codes or FIPS as feature.id.
+  const GEO_SOURCES = [
+    'https://cdn.jsdelivr.net/gh/PublicaMundi/MappingAPI@master/data/geojson/us-states.json',
+    'https://raw.githubusercontent.com/PublicaMundi/MappingAPI/master/data/geojson/us-states.json'
+  ];
+  function tryFetchGeo(idx = 0) {
+    if (idx >= GEO_SOURCES.length) {
+      choroEl.innerHTML = `<div class="empty" style="padding: 30px;"><div class="empty-icon">◉</div><div class="empty-title">Couldn't load map data</div><div class="empty-sub">Check your connection. The marker map below should still work.</div></div>`;
+      return;
+    }
+    fetch(GEO_SOURCES[idx])
+      .then(r => r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)))
+      .then(geo => renderChoroLayer(geo))
+      .catch(err => { console.warn('geo source failed', GEO_SOURCES[idx], err); tryFetchGeo(idx + 1); });
+  }
+
+  function renderChoroLayer(geo) {
+    L.geoJSON(geo, {
+      style: feature => {
+        const name = feature.properties && feature.properties.name;
+        const code = name ? STATE_NAME_TO_CODE[name.toLowerCase()] : null;
+        const data = code ? stateAgg.get(code) : null;
+        return {
+          fillColor: colorFor(data ? data.total : 0),
+          weight: 1, color: '#FBF7F0', opacity: 1,
+          fillOpacity: 0.92
+        };
+      },
+      onEachFeature: (feature, layer) => {
+        const name = feature.properties && feature.properties.name;
+        const code = name ? STATE_NAME_TO_CODE[name.toLowerCase()] : null;
+        const data = code ? stateAgg.get(code) : null;
+        const total = data ? data.total : 0;
+        const count = data ? data.count : 0;
+        layer.bindPopup(`
+          <h4>${escapeHtml(name || 'Unknown')}</h4>
+          <div class="pop-row"><span>Total raised</span><strong>${fmtMoney(total)}</strong></div>
+          <div class="pop-row"><span>Donors</span><strong>${fmtNum(count)}</strong></div>
+          <div class="pop-row"><span>Avg gift</span><strong>${count ? fmtMoney(total / count) : '—'}</strong></div>
+        `);
+        layer.on({
+          mouseover: e => e.target.setStyle({ weight: 2.5, color: '#1F1A14' }),
+          mouseout: e => e.target.setStyle({ weight: 1, color: '#FBF7F0' })
+        });
+      }
+    }).addTo(choro);
+
+    // Legend
+    const legendHtml = ['Less'];
+    for (let i = 0; i < 6; i++) {
+      const v = (i + 1) / 6 * maxTotal;
+      legendHtml.push(`<span class="legend-swatch" style="background: ${colorFor(v)}"></span>`);
+    }
+    legendHtml.push(`More (max ${fmtMoney(maxTotal)})`);
+    document.getElementById('choroLegend').innerHTML = legendHtml.join(' ');
+  }
+
+  tryFetchGeo();
+
+  // -------------- MARKER MAP --------------
+  const markersEl = document.getElementById('markerMap');
+  if (!markersEl) return;
+  const m2 = L.map('markerMap', { zoomControl: true, attributionControl: false }).setView([39.5, -98], 3.5);
+  state.maps.markers = m2;
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+    maxZoom: 18, subdomains: 'abcd'
+  }).addTo(m2);
+
+  stateRows.forEach(r => {
+    const c = STATE_CENTROIDS[r.code];
+    if (!c) return;
+    const radius = 8 + Math.sqrt(r.total / maxTotal) * 32;
+    const circle = L.circleMarker(c, {
+      radius, fillColor: '#2F5D3E', color: '#1F4029',
+      weight: 1.5, opacity: 1, fillOpacity: 0.55
+    }).addTo(m2);
+    const cityList = r.topCities.length
+      ? r.topCities.map(ct => `<div class="pop-row"><span>${escapeHtml(ct.city)}</span><strong>${fmtMoney(ct.total)}</strong></div>`).join('')
+      : '<div class="pop-row" style="color:var(--ink-muted)">No city data</div>';
+    circle.bindPopup(`
+      <h4>${escapeHtml(r.name)}</h4>
+      <div class="pop-row"><span>Total raised</span><strong>${fmtMoney(r.total)}</strong></div>
+      <div class="pop-row"><span>Donors</span><strong>${fmtNum(r.count)}</strong></div>
+      <div class="pop-row"><span>Avg gift</span><strong>${fmtMoney(r.avg)}</strong></div>
+      <div style="margin-top: 10px; font-family: 'JetBrains Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--ink-muted);">Top cities</div>
+      ${cityList}
+    `);
+  });
+
+  // Force a refresh — Leaflet sometimes needs this when container was hidden
+  setTimeout(() => { choro.invalidateSize(); m2.invalidateSize(); }, 100);
+}
+
+// ============================================================
+// PAGE: TIME OF DAY
+// ============================================================
+function buildTimeOfDay() {
+  const m = state.mapping;
+  const container = document.getElementById('time-content');
+
+  if (!m.date) {
+    container.innerHTML = `
+      <div class="card empty">
+        <div class="empty-icon">⌛</div>
+        <div class="empty-title">No date column mapped</div>
+        <div class="empty-sub">Map a date column with timestamps on the Upload page to unlock time-of-day analysis.</div>
+        <div style="margin-top: 18px;">
+          <button class="btn btn-ghost" onclick="goToPage('upload')">→ Go to upload</button>
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  const hourly = new Array(24).fill(null).map(() => ({ amounts: [], total: 0, count: 0, max: 0 }));
+  let datedRows = 0, totalRows = state.thisData.length;
+  state.thisData.forEach(r => {
+    const d = parseDateField(r[m.date]);
+    if (!d) return;
+    const amt = parseAmount(r[m.amount]);
+    const h = d.getHours();
+    hourly[h].amounts.push(amt);
+    hourly[h].total += amt;
+    hourly[h].count += 1;
+    if (amt > hourly[h].max) hourly[h].max = amt;
+    datedRows += 1;
+  });
+
+  if (!datedRows) {
+    container.innerHTML = `
+      <div class="card empty">
+        <div class="empty-icon">⌛</div>
+        <div class="empty-title">No timestamps could be parsed</div>
+        <div class="empty-sub">The date column you mapped doesn't appear to have time-of-day info, or the format isn't recognized.</div>
+      </div>
+    `;
+    return;
+  }
+
+  // Summary stats
+  const peakHourByTotal = hourly.reduce((best, h, i) => h.total > best.total ? { total: h.total, hour: i } : best, { total: 0, hour: 0 });
+  const peakHourByCount = hourly.reduce((best, h, i) => h.count > best.count ? { count: h.count, hour: i } : best, { count: 0, hour: 0 });
+  const overallAvg = hourly.reduce((s, h) => s + h.total, 0) / hourly.reduce((s, h) => s + h.count, 0);
+
+  container.innerHTML = `
+    <div class="kpi-grid">
+      <div class="kpi highlight">
+        <div class="kpi-label">Peak hour ($)</div>
+        <div class="kpi-value">${formatHour(peakHourByTotal.hour)}</div>
+        <div class="kpi-sub">${fmtMoney(peakHourByTotal.total)} raised</div>
+      </div>
+      <div class="kpi accent">
+        <div class="kpi-label">Peak hour (donors)</div>
+        <div class="kpi-value">${formatHour(peakHourByCount.hour)}</div>
+        <div class="kpi-sub">${fmtNum(peakHourByCount.count)} donations</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Avg gift overall</div>
+        <div class="kpi-value">${fmtMoney(overallAvg || 0)}</div>
+        <div class="kpi-sub">across all timestamped donations</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Timestamped rows</div>
+        <div class="kpi-value">${fmtNum(datedRows)}</div>
+        <div class="kpi-sub">${fmtPct(datedRows / totalRows * 100)} of all rows</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">Total raised by hour of day</div>
+          <div class="card-sub">When the donations actually flow in</div>
+        </div>
+      </div>
+      <div class="chart-wrap"><canvas id="chartHourTotal"></canvas></div>
+    </div>
+
+    <div class="card" style="margin-top: 18px;">
+      <div class="card-header">
+        <div>
+          <div class="card-title">Donation size distribution by hour</div>
+          <div class="card-sub">Pick an hour to see what gift sizes came in</div>
+        </div>
+        <div class="card-header-controls">
+          <select id="hourSelect" style="padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); font-size: 13px;">
+            ${hourly.map((h, i) => `<option value="${i}" ${i === peakHourByTotal.hour ? 'selected' : ''}>${formatHour(i)} — ${h.count} donations</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <div class="chart-wrap"><canvas id="chartHourHisto"></canvas></div>
+    </div>
+
+    <div class="card" style="margin-top: 18px;">
+      <div class="card-header">
+        <div>
+          <div class="card-title">Hour-by-hour breakdown</div>
+          <div class="card-sub">All the metrics in one place</div>
+        </div>
+      </div>
+      <div class="table-wrap" style="border: none;">
+        <div class="table-scroll" style="max-height: 480px;">
+          <table class="dt">
+            <thead><tr><th>Hour</th><th class="num">Donations</th><th class="num">Total raised</th><th class="num">Average gift</th><th class="num">Largest gift</th></tr></thead>
+            <tbody>
+              ${hourly.map((h, i) => `
+                <tr>
+                  <td><strong>${formatHour(i)}</strong></td>
+                  <td class="num">${fmtNum(h.count)}</td>
+                  <td class="num">${fmtMoney(h.total)}</td>
+                  <td class="num">${h.count ? fmtMoney(h.total / h.count) : '—'}</td>
+                  <td class="num">${h.max ? fmtMoney(h.max) : '—'}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // Render charts
+  destroyChart('chartHourTotal');
+  const ctx1 = document.getElementById('chartHourTotal').getContext('2d');
+  state.charts.chartHourTotal = new Chart(ctx1, {
+    type: 'bar',
+    data: {
+      labels: hourly.map((_, i) => formatHourShort(i)),
+      datasets: [{
+        label: 'Total raised',
+        data: hourly.map(h => h.total),
+        backgroundColor: hourly.map((_, i) => i === peakHourByTotal.hour ? '#B85C2C' : '#2F5D3E'),
+        borderRadius: 3
+      }]
+    },
+    options: chartBaseOptions({
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: ctx => fmtMoney(ctx.parsed.y) } }
+      },
+      scales: { x: chartAxisStyle(), y: chartAxisStyle() }
+    })
+  });
+
+  // Hour histogram
+  function renderHourHisto(h) {
+    const data = hourly[h];
+    destroyChart('chartHourHisto');
+    if (!data.amounts.length) {
+      const c = document.getElementById('chartHourHisto');
+      const ctx = c.getContext('2d');
+      ctx.clearRect(0, 0, c.width, c.height);
+      return;
+    }
+    const max = Math.max(...data.amounts);
+    const min = Math.min(...data.amounts);
+    const edges = niceBins(min, max, 6);
+    const counts = new Array(edges.length - 1).fill(0);
+    for (const a of data.amounts) {
+      let idx = edges.length - 2;
+      for (let i = 0; i < edges.length - 1; i++) {
+        if (a >= edges[i] && a < edges[i + 1]) { idx = i; break; }
+        if (i === edges.length - 2 && a >= edges[i]) idx = i;
+      }
+      counts[idx] += 1;
+    }
+    const labels = [];
+    for (let i = 0; i < edges.length - 1; i++) {
+      const lo = edges[i], hi = edges[i + 1];
+      labels.push(i === edges.length - 2 ? `${fmtMoneyShort(lo)}+` : `${fmtMoneyShort(lo)}–${fmtMoneyShort(hi)}`);
+    }
+    const ctx2 = document.getElementById('chartHourHisto').getContext('2d');
+    state.charts.chartHourHisto = new Chart(ctx2, {
+      type: 'bar',
+      data: { labels, datasets: [{ label: 'Donations', data: counts, backgroundColor: '#B85C2C', borderRadius: 4 }] },
+      options: chartBaseOptions({ plugins: { legend: { display: false } }, scales: { x: chartAxisStyle(), y: chartAxisStyle() } })
+    });
+  }
+  renderHourHisto(peakHourByTotal.hour);
+  document.getElementById('hourSelect').addEventListener('change', e => renderHourHisto(parseInt(e.target.value)));
+}
+
+function formatHour(h) {
+  const period = h < 12 ? 'AM' : 'PM';
+  const display = h === 0 ? 12 : h > 12 ? h - 12 : h;
+  return `${display}:00 ${period}`;
+}
+function formatHourShort(h) {
+  const period = h < 12 ? 'a' : 'p';
+  const display = h === 0 ? 12 : h > 12 ? h - 12 : h;
+  return `${display}${period}`;
+}
+
+// ============================================================
+// PAGE: RUNNERS
+// ============================================================
+function buildRunners() {
+  const m = state.mapping;
+  const container = document.getElementById('runners-content');
+
+  if (!m.runner) {
+    container.innerHTML = `
+      <div class="card empty">
+        <div class="empty-icon">★</div>
+        <div class="empty-title">No runner column mapped</div>
+        <div class="empty-sub">Map a Runner / Team column on the Upload page to see leaderboards.</div>
+        <div style="margin-top: 18px;">
+          <button class="btn btn-ghost" onclick="goToPage('upload')">→ Go to upload</button>
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  const agg = new Map();
+  state.thisData.forEach(r => {
+    const name = String(r[m.runner] || '').trim();
+    if (!name) return;
+    const amt = parseAmount(r[m.amount]);
+    if (!agg.has(name)) agg.set(name, { name, total: 0, count: 0, max: 0 });
+    const e = agg.get(name);
+    e.total += amt; e.count += 1;
+    if (amt > e.max) e.max = amt;
+  });
+  const runners = [...agg.values()].map(r => ({ ...r, avg: r.count ? r.total / r.count : 0 }));
+
+  if (!runners.length) {
+    container.innerHTML = `
+      <div class="card empty">
+        <div class="empty-icon">★</div>
+        <div class="empty-title">No runner data found</div>
+        <div class="empty-sub">The mapped column is empty for all rows.</div>
+      </div>
+    `;
+    return;
+  }
+
+  const byTotal = [...runners].sort((a, b) => b.total - a.total).slice(0, 10);
+  const byCount = [...runners].sort((a, b) => b.count - a.count).slice(0, 10);
+  const byAvg = [...runners].filter(r => r.count >= 3).sort((a, b) => b.avg - a.avg).slice(0, 10);
+
+  const totalRaised = runners.reduce((s, r) => s + r.total, 0);
+  const totalDonations = runners.reduce((s, r) => s + r.count, 0);
+
+  container.innerHTML = `
+    <div class="kpi-grid">
+      <div class="kpi accent">
+        <div class="kpi-label">Active runners</div>
+        <div class="kpi-value">${fmtNum(runners.length)}</div>
+        <div class="kpi-sub">collecting donations</div>
+      </div>
+      <div class="kpi highlight">
+        <div class="kpi-label">Top raiser</div>
+        <div class="kpi-value" style="font-size: 22px;">${escapeHtml(byTotal[0].name)}</div>
+        <div class="kpi-sub">${fmtMoney(byTotal[0].total)}</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Avg per runner</div>
+        <div class="kpi-value">${fmtMoney(totalRaised / runners.length)}</div>
+        <div class="kpi-sub">${fmtNum(totalDonations / runners.length)} donations each</div>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      ${leaderboardCard('Top by total raised', 'Who pulled in the most money', byTotal, 'total', fmtMoney)}
+      ${leaderboardCard('Top by donations collected', 'Who reached the most people', byCount, 'count', fmtNum)}
+    </div>
+
+    <div class="grid-2" style="margin-top: 18px;">
+      ${leaderboardCard('Highest average gift', '3+ donations · who attracts bigger gifts', byAvg, 'avg', fmtMoney)}
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">All runners</div>
+            <div class="card-sub">Full breakdown · sortable in CSV</div>
+          </div>
+          <button class="btn btn-ghost btn-sm" onclick="downloadRunnersCSV()">⬇ Download CSV</button>
+        </div>
+        <div class="table-wrap" style="border: none;">
+          <div class="table-scroll" style="max-height: 380px;">
+            <table class="dt">
+              <thead><tr><th>Runner</th><th class="num">Donations</th><th class="num">Total</th><th class="num">Avg</th></tr></thead>
+              <tbody>
+                ${[...runners].sort((a, b) => b.total - a.total).map(r => `
+                  <tr>
+                    <td>${escapeHtml(r.name)}</td>
+                    <td class="num">${fmtNum(r.count)}</td>
+                    <td class="num">${fmtMoney(r.total)}</td>
+                    <td class="num">${fmtMoney(r.avg)}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  state._runners = runners;
+}
+
+function leaderboardCard(title, sub, items, valueKey, fmt) {
+  return `
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">${title}</div>
+          <div class="card-sub">${sub}</div>
+        </div>
+      </div>
+      <div class="table-wrap" style="border: none;">
+        <table class="dt">
+          <thead><tr><th>#</th><th>Runner</th><th class="num">${valueKey === 'total' ? 'Raised' : valueKey === 'count' ? 'Donations' : 'Avg gift'}</th></tr></thead>
+          <tbody>
+            ${items.map((r, i) => `
+              <tr>
+                <td><span class="rank-num ${i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : ''}">${i + 1}</span></td>
+                <td><strong>${escapeHtml(r.name)}</strong></td>
+                <td class="num">${fmt(r[valueKey])}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+function downloadRunnersCSV() {
+  if (!state._runners || !state._runners.length) return;
+  const cols = ['Runner', 'Donations', 'Total Raised', 'Average Gift', 'Largest Gift'];
+  const rows = [...state._runners].sort((a, b) => b.total - a.total).map(r => [
+    r.name, r.count, r.total.toFixed(2), r.avg.toFixed(2), r.max.toFixed(2)
+  ]);
+  const csv = [cols.join(',')].concat(rows.map(row => row.map(csvCell).join(','))).join('\n');
+  downloadCSV(csv, `runners_${todayStr()}.csv`);
+}
+
+// ============================================================
+// NAV
+// ============================================================
+function goToPage(page) {
+  // If trying to view a data page before building, send to upload
+  const dataPages = ['overview', 'lapsed', 'geography', 'time', 'runners'];
+  if (dataPages.includes(page) && !state.built) {
+    page = 'upload';
+  }
+  document.querySelectorAll('.page').forEach(p => p.classList.add('hidden'));
+  const target = document.getElementById('page-' + page);
+  if (target) {
+    target.classList.remove('hidden');
+    target.classList.add('fade-in');
+    setTimeout(() => target.classList.remove('fade-in'), 400);
+  }
+  document.querySelectorAll('.nav-item').forEach(b => b.classList.toggle('active', b.dataset.page === page));
+  // Map needs invalidate when shown
+  if (page === 'geography' && state.maps.choro) {
+    setTimeout(() => { state.maps.choro.invalidateSize(); state.maps.markers.invalidateSize(); }, 50);
+  }
+  // Close mobile menu
+  document.getElementById('sidebar').classList.remove('open');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+document.querySelectorAll('.nav-item').forEach(btn => {
+  btn.addEventListener('click', () => goToPage(btn.dataset.page));
+});
+
+document.getElementById('menuToggle').addEventListener('click', () => {
+  document.getElementById('sidebar').classList.toggle('open');
+});
+
+// On first load, show upload page and hide overview placeholder
+window.addEventListener('DOMContentLoaded', () => {
+  // Initially: upload page
+  goToPage('upload');
+  // Render empty overview placeholder so it doesn't error if user clicks
+  document.getElementById('overview-content').innerHTML = `
+    <div class="card empty">
+      <div class="empty-icon">↑</div>
+      <div class="empty-title">No data loaded yet</div>
+      <div class="empty-sub">Head to the Upload page to load your donor file and unlock the dashboard.</div>
+      <div style="margin-top: 18px;"><button class="btn btn-ghost" onclick="goToPage('upload')">→ Go to upload</button></div>
+    </div>
+  `;
 });
 </script>
 </body>
